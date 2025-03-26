@@ -1,0 +1,58 @@
+[
+  {
+    "collection": "users",
+    "documents": [
+      {
+        "_id": { "$oid": "60a5b6d4f9b1c8b7d6e5f4c3" },
+        "username": "thomas",
+        "email": "thomas@workit.com",
+        "password": "password123",
+        "fullName": "Thomas Bernard",
+        "isFreelancer": true,
+        "profilePicture": "https://randomuser.me/api/portraits/men/32.jpg",
+        "bio": "Développeur full stack avec 5 ans d'expérience",
+        "skills": ["React", "Node.js", "TypeScript", "MongoDB"],
+        "location": "Tunis, Tunisie",
+        "contactInfo": "thomas@workit.com",
+        "joinedDate": { "$date": "2021-05-10T00:00:00Z" },
+        "isAdmin": false,
+        "createdAt": { "$date": "2021-05-10T00:00:00Z" },
+        "updatedAt": { "$date": "2021-05-10T00:00:00Z" }
+      },
+      {
+        "_id": { "$oid": "60b5c7e5f0a2d9c8e7f6a5b4" },
+        "username": "julie",
+        "email": "julie@workit.com",
+        "password": "password123",
+        "fullName": "Julie Moreau",
+        "isFreelancer": true,
+        "profilePicture": "https://randomuser.me/api/portraits/women/44.jpg",
+        "bio": "Rédactrice SEO et copywriter professionnelle",
+        "skills": ["SEO", "Copywriting", "Content Strategy", "Blogging"],
+        "location": "Sousse, Tunisie",
+        "contactInfo": "julie@workit.com",
+        "joinedDate": { "$date": "2021-06-15T00:00:00Z" },
+        "isAdmin": false,
+        "createdAt": { "$date": "2021-06-15T00:00:00Z" },
+        "updatedAt": { "$date": "2021-06-15T00:00:00Z" }
+      },
+      {
+        "_id": { "$oid": "60c5d8f6f1b3e0d9f8a7b6c5" },
+        "username": "client",
+        "email": "client@workit.com",
+        "password": "password123",
+        "fullName": "Client Test",
+        "isFreelancer": false,
+        "profilePicture": "https://randomuser.me/api/portraits/men/67.jpg",
+        "bio": "Entrepreneur à la recherche de talents",
+        "skills": [],
+        "location": "Sfax, Tunisie",
+        "contactInfo": "client@workit.com",
+        "joinedDate": { "$date": "2021-07-20T00:00:00Z" },
+        "isAdmin": false,
+        "createdAt": { "$date": "2021-07-20T00:00:00Z" },
+        "updatedAt": { "$date": "2021-07-20T00:00:00Z" }
+      }
+    ]
+  }
+]

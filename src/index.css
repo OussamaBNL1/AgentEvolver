@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  color: #fff;
+  background-color: #121212;
+}
+
+:root {
+  --background: 0 0% 7%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 12%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 12%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 262 91% 62%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 20%;
+  --muted-foreground: 0 0% 70%;
+  --accent: 262 91% 62%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 262 91% 62%;
+  --radius: 0.5rem;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-workit-purple text-white px-4 py-2 rounded-md hover:bg-workit-purple-light transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-workit-dark-card text-white px-4 py-2 rounded-md hover:bg-gray-800 transition-colors border border-gray-700;
+  }
+
+  .card {
+    @apply bg-workit-dark-card rounded-lg border border-gray-800;
+  }
+}
+
+/* Additional styling for the WorkiT platform */
+.workit-gradient {
+  background: linear-gradient(to bottom right, #7B42F6, #B01EFF);
+}
