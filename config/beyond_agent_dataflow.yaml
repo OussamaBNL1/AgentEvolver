@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file://verl/verl/trainer/config
+    - file://external/verl/verl/trainer/config
 
 defaults:
   - ppo_trainer
@@ -15,15 +15,21 @@ data:
 
 actor_rollout_ref:
   hybrid_engine: True
+  actor:
+    loss_agg_mode: seq-mean-token-mean
   rollout:
     name: vllm
     mode: async
     multi_turn:
       enabled: True
       format: llama3_json
+      max_steps: 30
     custom_dataflow_cls:
       path: ""
       name: ""
+    use_qwen3: True
+    max_env_worker: 64
+    max_env_len: 4096
 
 thread_pool:
   max_workers: 5
@@ -35,6 +41,6 @@ env_service:
 experience_maker:
   base_url: "http://127.0.0.1:8001"
   workspace_id: "w1_agentflow"
-  enable_summarizer: True
-  enable_context_generator: True
+  enable_summarizer: False
+  enable_context_generator: False
   retrieve_top_k: 3

@@ -4,6 +4,7 @@ from beyondagent.client.em_client import EMClient
 from beyondagent.client.env_client import EnvClient
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.schema.trajectory import Trajectory
+from beyondagent.utils.utils import convert_tool_to_user_message
 
 
 class AgentFlow(BaseAgentFlow):
@@ -12,40 +13,55 @@ class AgentFlow(BaseAgentFlow):
         super().__init__(**kwargs)
         self.instruction_template_ids = self.tokenizer.encode("<|im_start|>user\n")
         self.response_template_ids = self.tokenizer.encode("<|im_start|>assistant\n")
-        self.em_client = EMClient(base_url=self.config.experiencemaker.base_url)
+        self.em_client = EMClient(base_url=self.config.experience_maker.base_url)
 
     def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
-        if self.config.experiencemaker.enable_context_generator:  # add by jinli 0618
+        if self.config.experience_maker.enable_context_generator:  # add by jinli 0618
             history_experience = self.em_client.call_context_generator(
                 trajectory=trajectory,
-                retrieve_top_k=self.config.experiencemaker.retrieve_top_k,
-                workspace_id=self.config.experiencemaker.workspace_id)
+                retrieve_top_k=self.config.experience_maker.retrieve_top_k,
+                workspace_id=self.config.experience_maker.workspace_id)
+
 
             if history_experience:
                 logger.info(f"history_experience={history_experience}")
-                trajectory.steps[-1]["content"] = history_experience + "\n\n" + trajectory.steps[-1]["content"]
+                new_content = history_experience + "\n\n" + trajectory.steps[-1]["content"]
+                trajectory.steps[-1]["content"] = new_content
+            else:
+                logger.info(f"history_experience is empty!")
 
         for act_step in range(self.max_steps):
-            prompt_text = self.tokenizer.apply_chat_template(trajectory.steps,
+            # if use qwen3, add /no_think
+            if self.config.actor_rollout_ref.rollout.use_qwen3:
+                trajectory.steps[-1]["content"] += " /no_think"
+
+            prompt_text = self.tokenizer.apply_chat_template(trajectory.steps, 
                                                              tokenize=False,
                                                              add_generation_prompt=True)
             current_token_len = len(self.tokenizer(prompt_text, return_tensors="pt", padding=False)["input_ids"][0])
 
-            if current_token_len > self.max_model_len:
+            # yunpeng 0623: to prevent add an imend token to an uncompleted seq, 
+            # because the message-type output will be applied chat_template.
+            max_response_length = self.config.actor_rollout_ref.rollout.response_length
+            if current_token_len + max_response_length > self.max_model_len:
                 logger.warning(f"exceed max model len={self.max_model_len}")
                 break
 
             # callback llm server, messages.size=1
             llm_output = self.llm_chat_fn(trajectory.steps)
-            assert len(llm_output) == 1
+            # llm_output = self.llm_chat_fn(trajectory.steps, custom_sampling_params={"max_completion_tokens": self.max_model_len-current_token_len})
+            assert len(llm_output) == 1, llm_output
             trajectory.steps.extend(llm_output)
 
             env_output = env.step(instance_id, llm_output[0])
+            # convert role_tool to role_user message
+            # breakpoint()
+            
+            # useless: for tool role
+            if env_output["state"]["role"] == "tool":
+                env_output["state"] = convert_tool_to_user_message(env_output["state"], self.tokenizer, format="qwen")
+            
             state_content: str = env_output["state"]["content"]
-            # yunpeng add: 
-            # if env_output["state"]["role"]=="tool":
-            #     env_output["state"]["role"] = "user"
-
             if len(self.tokenizer(state_content, return_tensors="pt", padding=False)["input_ids"][
                        0]) > self.max_env_len:
                 env_output["state"]["content"] = state_content[:self.max_env_len]

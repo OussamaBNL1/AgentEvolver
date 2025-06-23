@@ -104,8 +104,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         self.reward_fn = parse_reward_from_dataproto
         self.val_reward_fn = parse_reward_from_dataproto
 
-        self.em_client = EMClient(base_url=self.config.experiencemaker.base_url)
-        self.env_manager = ParallelEnvManager(config=self.config, async_rollout_manager=self.async_rollout_manager)
+        self.em_client = EMClient(base_url=self.config.experience_maker.base_url)
+        self.env_manager = ParallelEnvManager(config=self.config, async_rollout_manager=self.async_rollout_manager, max_parallel=self.config.actor_rollout_ref.rollout.max_env_worker)
         self.thread_pool = ThreadPoolExecutor(max_workers=self.config.thread_pool.max_workers)
 
     def _validate(self):
@@ -127,11 +127,6 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch["reward_model"]["style"] == "model":
                 return {}
 
-            # Store original inputs
-            input_ids = test_batch.batch["input_ids"]
-            # TODO: Can we keep special tokens except for padding tokens?
-            input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
-            sample_inputs.extend(input_texts)
 
             batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
             non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
@@ -158,26 +153,34 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             print(f"test_gen_batch meta info: {test_gen_batch.meta_info}")
 
             # pad to be divisible by dp_size
-            test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
+            # test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             if not self.async_rollout_mode:
                 test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
             else:
                 self.async_rollout_manager.wake_up()
                 tasks = [Task(
-                            task_id=test_gen_batch_padded.non_tensor_batch["extras"][i]["task_id"], 
-                            query=test_gen_batch_padded.non_tensor_batch["raw_prompt"][i],
-                    env_type=self.config.env_service.env_type
-                         ) for i in range(len(test_gen_batch_padded))]
+                            task_id=test_gen_batch.non_tensor_batch["extras"][i]["task_id"], 
+                            query=test_gen_batch.non_tensor_batch["raw_prompt"][i],
+                            env_type=self.config.env_service.env_type
+                         ) for i in range(len(test_gen_batch))]
+                print("=" * 10 + "start validate rollout" + "=" * 10)
                 trajectories = self.env_manager.rollout(tasks, mode="validate")
-                test_output_gen_batch_padded = self.env_manager.to_dataproto(trajectories)
+                print("=" * 10 + "end validate rollout" + "=" * 10)
+                test_output_gen_batch = self.env_manager.to_dataproto(trajectories)
                 # test_output_gen_batch_padded = self.explorer_manager.rollout(test_gen_batch_padded)
                 # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
                 self.async_rollout_manager.sleep()
 
             # unpad
-            test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
+            # test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
             print("validation generation end")
 
+            # Store original inputs
+            input_ids = test_output_gen_batch.batch["prompts"]
+            # TODO: Can we keep special tokens except for padding tokens?
+            input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
+            sample_inputs.extend(input_texts)
+            
             # Store generated outputs
             output_ids = test_output_gen_batch.batch["responses"]
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
@@ -268,6 +271,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         
         # [0616] qingxu: add `RAY_DEBUG_POST_MORTEM` env var to activate breakpoint debugging
         # vscode_conditional_breakpoint()
+        # breakpoint()
 
         # add tqdm
         progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")
@@ -312,12 +316,18 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             tasks = [Task(
                                         task_id=gen_batch.non_tensor_batch["extras"][i]["task_id"], 
                                         query=gen_batch.non_tensor_batch["raw_prompt"][i],
-                                env_type=self.config.env_service.env_type
+                                        env_type=self.config.env_service.env_type
                                     ) for i in range(len(gen_batch))]
 
                             # TODO enable tracing by jinli 0619
+                            print("=" * 10 + "start fit rollout" + "=" * 10)
                             trajectories = self.env_manager.rollout(tasks, mode="sample")
+                            print("=" * 10 + "end fit rollout" + "=" * 10)
+
                             gen_batch_output = self.env_manager.to_dataproto(trajectories)
+                            print(f"gen_batch_output.info batch.keys={gen_batch_output.batch.keys()}")
+                            num_term_traj = sum([traj.is_terminated  for traj in trajectories])
+                            num_not_none_traj = sum([len(traj.steps)>0  for traj in trajectories])
 
                             # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
                             self.async_rollout_manager.sleep()
@@ -342,6 +352,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     # repeat to align with repeated responses in rollout
                     batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                     batch = batch.union(gen_batch_output)
+                    # breakpoint()
 
                     batch.batch["response_mask"] = compute_response_mask(batch)
 
@@ -351,7 +362,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                         summary_task = self.thread_pool.submit(self.em_client.call_summarizer,
                                                                trajectories=trajectories,
                                                                workspace_id=self.config.experience_maker.workspace_id)
-
+                        print("async submit summary_task~")
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
                     # Please take care when you implement group based adv computation such as GRPO and rloo
@@ -454,6 +465,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                             config=self.config.algorithm,
                         )
+                        # breakpoint()
 
                     # update critic
                     if self.use_critic:
@@ -473,6 +485,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
                     if summary_task is not None:
                         experience_list = summary_task.result()
+                        print("wait for summary_task complete~")
                         if experience_list:
                             for i, experience in enumerate(experience_list):
                                 print(f"index={i} experience={experience}")
@@ -510,6 +523,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     {
                         "training/global_step": self.global_steps,
                         "training/epoch": epoch,
+                        "training/num_not_none_traj": num_not_none_traj,
+                        "training/num_term_traj": num_term_traj
                     }
                 )
                 # collect metrics

@@ -8,6 +8,7 @@ from loguru import logger
 from omegaconf import DictConfig
 from tensordict import TensorDict
 from torch.nn.utils.rnn import pad_sequence
+from tqdm import tqdm
 from verl import DataProto
 from verl.utils.model import compute_position_id_with_mask
 from verl.utils.torch_functional import (pad_sequence_to_length)
@@ -21,7 +22,7 @@ from beyondagent.schema.trajectory import Trajectory, Sample
 
 
 class ParallelEnvManager(object):
-    def __init__(self, config: DictConfig, async_rollout_manager: AsyncLLMServerManager, max_parallel: int = 32,
+    def __init__(self, config: DictConfig, async_rollout_manager: AsyncLLMServerManager, max_parallel: int,
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -76,7 +77,9 @@ class ParallelEnvManager(object):
             sampling_params["top_p"] = self.rollout_config.val_kwargs.top_p
 
         llm_chat_fn = self.get_llm_chat_fn(sampling_params)
-        agent_flow: BaseAgentFlow = AgentFlow(llm_chat_fn=llm_chat_fn, tokenizer=self.tokenizer, config=self.config,
+        agent_flow: BaseAgentFlow = AgentFlow(llm_chat_fn=llm_chat_fn, 
+                                              tokenizer=self.tokenizer, 
+                                              config=self.config,
                                               **kwargs)
 
         # FIXME pass env_type & task_id
@@ -98,7 +101,7 @@ class ParallelEnvManager(object):
                                              rollout_id=str(rollout_id), mode=mode, thread_index=thread_index)
                     futures.append(future)
 
-            for future in futures:
+            for future in tqdm(futures):
                 # do not fail silently
                 result = future.result()
                 trajectory_list.append(result)
@@ -122,6 +125,9 @@ class ParallelEnvManager(object):
         samples = []
         for trajectory in trajectories:
             messages = trajectory.steps
+            if len(messages) == 0:
+                # Fixme: empty trajectory yunpeng
+                messages = [{"role": "user", "content": ""}, {"role": "assistant", "content": ""}]
             full_text = self.tokenizer.apply_chat_template(messages, tokenize=False)
             outputs = self.tokenizer(full_text, return_tensors="pt", padding=False)
             input_ids = outputs["input_ids"][0].tolist()  # 移除batch维度

@@ -1,6 +1,7 @@
 import asyncio
 from typing import List
 
+from loguru import logger
 from pydantic import Field
 
 from beyondagent.schema.trajectory import Trajectory, Reward
@@ -20,6 +21,9 @@ class EMClient(HttpClient):
             "metadata": kwargs
         }
         response = self.request(json_data=json_data, headers={"Content-Type": "application/json"})
+        if response is None:
+            logger.warning("error call_context_generator")
+            return ""
 
         # TODO return raw experience instead of context @jinli
         return response["context_msg"]["content"]
@@ -40,6 +44,10 @@ class EMClient(HttpClient):
             "metadata": kwargs
         }
         response = self.request(json_data=json_data, headers={"Content-Type": "application/json"})
+        if response is None:
+            logger.warning("error call_context_generator")
+            return ""
+
         return response["experiences"]
 
     async def async_call_summarizer(self, executor=None, **kwargs):
