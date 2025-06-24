@@ -53,6 +53,8 @@ class ParallelEnvManager(object):
 
             # output_messages = []
             input_messages = copy.deepcopy(messages)
+            weighted_addresses = self.async_rollout_manager.chat_scheduler.weighted_addresses
+            logger.info(f"weighted_addresses={weighted_addresses}")
             self.async_rollout_manager.submit_chat_completions(messages=input_messages,
                                                                sampling_params=updated_sampling_params,
                                                                request_id=request_id)
