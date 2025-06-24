@@ -24,6 +24,7 @@ actor_rollout_ref:
       enable: True
       format: llama3_json
       max_steps: 30
+      tool_config_path: ""
     custom_dataflow_cls:
       path: ""
       name: ""

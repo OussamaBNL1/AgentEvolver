@@ -79,11 +79,15 @@ class AgentFlow(BaseAgentFlow):
             # TODO require env
             # trajectory.reward.outcome = env_output["reward"]["outcome"]
             # trajectory.reward.description = env_output["reward"]["description"]
-            trajectory.reward.outcome = env_output["reward"]
-            trajectory.reward.description = "Outcome 1 = success, 0 = failure."
+            # trajectory.reward.outcome = env_output["reward"]
+            # trajectory.reward.description = "Outcome 1 = success, 0 = failure."
 
             if trajectory.is_terminated:
                 break
+        
+        score = env.evaluate(instance_id, params={"sparse": False})
+        trajectory.reward.outcome = score
+        trajectory.reward.description = "Outcome 1 = success, 0 = failure."
 
         if trajectory.steps[-1]["role"] == "user":
             trajectory.steps = trajectory.steps[:-1]

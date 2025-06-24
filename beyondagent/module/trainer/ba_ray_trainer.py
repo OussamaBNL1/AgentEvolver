@@ -112,10 +112,129 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             self.async_rollout_mode = True
             self.async_rollout_manager = BaAsyncLLMServerManager(
                 config=self.config,
-                worker_group=self.actor_rollout_wg,
+                worker_group=self.actor_rollout_wg)
+    
+    def _validate_config(self):
+        # 0623 yunpeng add. keep the same as the original func except for the param of tool_config_path
+        config = self.config
+        # number of GPUs total
+        n_gpus = config.trainer.n_gpus_per_node * config.trainer.nnodes
+        if config.actor_rollout_ref.actor.strategy == "megatron":
+            model_parallel_size = config.actor_rollout_ref.actor.megatron.tensor_model_parallel_size * config.actor_rollout_ref.actor.megatron.pipeline_model_parallel_size
+            assert n_gpus % (model_parallel_size * config.actor_rollout_ref.actor.megatron.context_parallel_size) == 0, f"n_gpus ({n_gpus}) must be divisible by model_parallel_size ({model_parallel_size}) times context_parallel_size ({config.actor_rollout_ref.actor.megatron.context_parallel_size})"
+            megatron_dp = n_gpus // (model_parallel_size * config.actor_rollout_ref.actor.megatron.context_parallel_size)
+            minimal_bsz = megatron_dp * config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu
+        else:
+            minimal_bsz = n_gpus
+
+        # 1. Check total batch size for data correctness
+        real_train_batch_size = config.data.train_batch_size * config.actor_rollout_ref.rollout.n
+        assert real_train_batch_size % minimal_bsz == 0, f"real_train_batch_size ({real_train_batch_size}) must be divisible by minimal possible batch size ({minimal_bsz})"
+
+        # A helper function to check "micro_batch_size" vs "micro_batch_size_per_gpu"
+        # We throw an error if the user sets both. The new convention is "..._micro_batch_size_per_gpu".
+        def check_mutually_exclusive(mbs, mbs_per_gpu, name: str):
+            settings = {
+                "actor_rollout_ref.actor": "micro_batch_size",
+                "critic": "micro_batch_size",
+                "reward_model": "micro_batch_size",
+                "actor_rollout_ref.ref": "log_prob_micro_batch_size",
+                "actor_rollout_ref.rollout": "log_prob_micro_batch_size",
+            }
+
+            if name in settings:
+                param = settings[name]
+                param_per_gpu = f"{param}_per_gpu"
+
+                if mbs is None and mbs_per_gpu is None:
+                    raise ValueError(f"[{name}] Please set at least one of '{name}.{param}' or '{name}.{param_per_gpu}'.")
+
+                if mbs is not None and mbs_per_gpu is not None:
+                    raise ValueError(f"[{name}] You have set both '{name}.{param}' AND '{name}.{param_per_gpu}'. Please remove '{name}.{param}' because only '*_{param_per_gpu}'" + "is supported (the former is deprecated).")
+
+        if not config.actor_rollout_ref.actor.use_dynamic_bsz:
+            # actor: ppo_micro_batch_size vs. ppo_micro_batch_size_per_gpu
+            check_mutually_exclusive(
+                config.actor_rollout_ref.actor.ppo_micro_batch_size,
+                config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu,
+                "actor_rollout_ref.actor",
             )
 
+            if self.use_reference_policy:
+                # reference: log_prob_micro_batch_size vs. log_prob_micro_batch_size_per_gpu
+                check_mutually_exclusive(
+                    config.actor_rollout_ref.ref.log_prob_micro_batch_size,
+                    config.actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu,
+                    "actor_rollout_ref.ref",
+                )
 
+            #  The rollout section also has log_prob_micro_batch_size vs. log_prob_micro_batch_size_per_gpu
+            check_mutually_exclusive(
+                config.actor_rollout_ref.rollout.log_prob_micro_batch_size,
+                config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu,
+                "actor_rollout_ref.rollout",
+            )
+
+        if self.use_critic and not config.critic.use_dynamic_bsz:
+            # Check for critic micro-batch size conflicts
+            check_mutually_exclusive(config.critic.ppo_micro_batch_size, config.critic.ppo_micro_batch_size_per_gpu, "critic")
+
+        # Check for reward model micro-batch size conflicts
+        if config.reward_model.enable and not config.reward_model.use_dynamic_bsz:
+            check_mutually_exclusive(config.reward_model.micro_batch_size, config.reward_model.micro_batch_size_per_gpu, "reward_model")
+
+        # Actor
+        # check if train_batch_size is larger than ppo_mini_batch_size
+        # if NOT dynamic_bsz, we must ensure:
+        #    ppo_mini_batch_size is divisible by ppo_micro_batch_size
+        #    ppo_micro_batch_size * sequence_parallel_size >= n_gpus
+        if not config.actor_rollout_ref.actor.use_dynamic_bsz:
+            assert config.data.train_batch_size >= config.actor_rollout_ref.actor.ppo_mini_batch_size
+            sp_size = config.actor_rollout_ref.actor.get("ulysses_sequence_parallel_size", 1)
+            if config.actor_rollout_ref.actor.ppo_micro_batch_size is not None:
+                assert config.actor_rollout_ref.actor.ppo_mini_batch_size % config.actor_rollout_ref.actor.ppo_micro_batch_size == 0
+                assert config.actor_rollout_ref.actor.ppo_micro_batch_size * sp_size >= n_gpus
+
+        assert config.actor_rollout_ref.actor.loss_agg_mode in [
+            "token-mean",
+            "seq-mean-token-sum",
+            "seq-mean-token-mean",
+            "seq-mean-token-sum-norm",
+        ], f"Invalid loss_agg_mode: {config.actor_rollout_ref.actor.loss_agg_mode}"
+
+        if config.algorithm.use_kl_in_reward and config.actor_rollout_ref.actor.use_kl_loss:
+            print("NOTICE: You have both enabled in-reward kl and kl loss.")
+
+        # critic
+        if self.use_critic and not config.critic.use_dynamic_bsz:
+            assert config.data.train_batch_size >= config.critic.ppo_mini_batch_size
+            sp_size = config.critic.get("ulysses_sequence_parallel_size", 1)
+            if config.critic.ppo_micro_batch_size is not None:
+                assert config.critic.ppo_mini_batch_size % config.critic.ppo_micro_batch_size == 0
+                assert config.critic.ppo_micro_batch_size * sp_size >= n_gpus
+
+        # Check if use_remove_padding is enabled when using sequence parallelism for fsdp
+        if config.actor_rollout_ref.actor.strategy == "fsdp" and (config.actor_rollout_ref.actor.get("ulysses_sequence_parallel_size", 1) > 1 or config.actor_rollout_ref.ref.get("ulysses_sequence_parallel_size", 1) > 1):
+            assert config.actor_rollout_ref.model.use_remove_padding, "When using sequence parallelism for actor/ref policy, you must enable `use_remove_padding`."
+
+        if self.use_critic and config.critic.strategy == "fsdp":
+            if config.critic.get("ulysses_sequence_parallel_size", 1) > 1:
+                assert config.critic.model.use_remove_padding, "When using sequence parallelism for critic, you must enable `use_remove_padding`."
+
+        if config.data.get("val_batch_size", None) is not None:
+            print("WARNING: val_batch_size is deprecated." + " Validation datasets are sent to inference engines as a whole batch," + " which will schedule the memory themselves.")
+
+        # check eval config
+        if config.actor_rollout_ref.rollout.val_kwargs.do_sample:
+            assert config.actor_rollout_ref.rollout.temperature > 0, "validation gen temperature should be greater than 0 when enabling do_sample"
+
+        # check multi_turn with tool config
+        if config.actor_rollout_ref.rollout.multi_turn.enable:
+            # 0623 yunpeng comment: no need this tool_config_path
+            # assert config.actor_rollout_ref.rollout.multi_turn.tool_config_path is not None or config.actor_rollout_ref.rollout.multi_turn.interaction_config_path is not None, "tool_config_path or interaction_config_path must be set when enabling multi_turn with tool, due to no role-playing support"
+            assert config.algorithm.adv_estimator in [AdvantageEstimator.GRPO], "only GRPO is tested for multi-turn with tool"
+
+        print("[validate_config] All configuration checks passed successfully!")
     def _validate(self):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)

@@ -3,7 +3,7 @@
 
 set -x
 export HYDRA_FULL_ERROR=1
-export RAY_DEBUG_POST_MORTEM=1
+# export RAY_DEBUG_POST_MORTEM=1
 ulimit -n 65535
 
 PROJECT_DIR="$(pwd)"
