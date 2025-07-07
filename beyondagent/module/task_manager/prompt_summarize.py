@@ -64,7 +64,7 @@ def _get_action_observation_pair(traj:Trajectory)->list[tuple[str,str]]:
     
     return res
 
-def get_task_summarize_prompt(trajectories:Sequence[Trajectory],len_history:int=2) -> tuple[str,str]:
+def get_task_summarize_prompt(trajectories:Sequence[Trajectory],old_objectives:Sequence[TaskObjective],len_history:int=2) -> tuple[str,str]:
     """获取任务摘要 prompt"""
     x=""
     idx=0
@@ -81,14 +81,30 @@ def get_task_summarize_prompt(trajectories:Sequence[Trajectory],len_history:int=
             x+=f"### Reward: {traj.reward.outcome}\n{traj.reward.description}\n"
             idx+=1
     
+    objectives:list[str]=[]
+    for ob in old_objectives:
+        if isinstance(ob.objective,str):
+            objectives.append(ob.objective)
+        else:
+            objectives.extend(ob.objective)
+    
     user_prompt=f"""Please analyze the following agent interaction sequence and abstract specific tasks from it:
 
 {x}
+
+# Old Objectives
+You have already explored the following objectives:
+
+{objectives}
+
+Please avoid repeating the objectives in the current exploration.
 
 # Now Start
 
 Please identify the specific tasks the agent is attempting to complete in these interactions, and abstract them into clear task descriptions and queries following the specified format.
 """
+    print("old_objectives: ",objectives)
+
     return AGENT_SUMMARIZE_SYSTEM_PROMPT,user_prompt
 
 

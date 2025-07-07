@@ -6,7 +6,7 @@ import functools
 import json
 import os
 import time
-from typing import Callable, Iterable, NotRequired, Optional, Sequence, TypedDict, Unpack
+from typing import Callable, Iterable, NotRequired, Optional, Sequence, TypedDict, Unpack, override
 
 import hydra
 from loguru import logger
@@ -18,9 +18,9 @@ from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.module.task_manager.adapter import OnflyRlDataset, to_rl_dataset
 from beyondagent.module.task_manager.env_worker import EnvWorker
 from beyondagent.module.task_manager.filters import TaskPostFilter
-from beyondagent.module.task_manager.prompt_explore import AGENT_INTERACTION_SYSTEM_PROMPT
+from beyondagent.module.task_manager.prompt_explore import get_agent_interaction_system_prompt
 from beyondagent.module.task_manager.prompt_summarize import get_task_summarize_prompt, parse_tasks_from_response
-from beyondagent.module.task_manager.protocols import LlmClient
+from beyondagent.module.task_manager.protocols import LlmClient, TaskObjectiveRetrieval
 from beyondagent.schema.task import Task, TaskObjective
 from beyondagent.schema.trajectory import Trajectory
 
@@ -42,9 +42,10 @@ class TaskManagerProps(TypedDict):
 
 class TaskManager(object):
 
-    def __init__(self, config:DictConfig, llm_client: LlmClient,tokenizer, env_service_url:str,**kwargs:Unpack[TaskManagerProps]):
+    def __init__(self, config:DictConfig, llm_client: LlmClient,old_retrival:TaskObjectiveRetrieval,tokenizer, env_service_url:str,**kwargs:Unpack[TaskManagerProps]):
         self._config=config
         self._llm_client = llm_client
+        self._old_retrival = old_retrival
         self._env_service_url = env_service_url
         self._tokenizer = tokenizer # TODO: 这玩意似乎不该在这
         self._max_llm_retries = kwargs["max_llm_retries"] or 3
@@ -147,9 +148,11 @@ class TaskManager(object):
                                             tokenizer=self._tokenizer, 
                                             config=self._config)
         agent_flow.max_steps=self._max_explore_step # TODO(cc): this is ugly
+
+        old_objectives=self._old_retrival.retrieve_objectives(task)
         
         assert isinstance(task.query,str)
-        traj=env_worker.execute(data_id=data_id, rollout_id=rollout_id,system_prompt=AGENT_INTERACTION_SYSTEM_PROMPT, agent_flow=agent_flow)
+        traj=env_worker.execute(data_id=data_id, rollout_id=rollout_id,system_prompt=get_agent_interaction_system_prompt(task,old_objectives), agent_flow=agent_flow)
         
         return traj
     
@@ -157,7 +160,13 @@ class TaskManager(object):
         with ThreadPoolExecutor(max_workers=self._num_exploration_threads) as executor:
             futures = [executor.submit(self._step_summarize, task, traj) for task, traj in zip(tasks, trajectories)]
             results = [future.result() for future in futures]
-            return sum(results,[])
+            results = sum(results,[])
+            
+            # append to old retrival, to avoid duplicate exploration next time.
+            for r in results:
+                self._old_retrival.add_objective(r)
+
+            return results
     
     
     def _step_summarize(self,task:Task,trajectory:Trajectory)->list[TaskObjective]:
@@ -170,7 +179,8 @@ class TaskManager(object):
         """
         # 这个方法从现在看基本上是固定的
         llm_fn=self._get_llm_chat_fn()
-        system_prompt,user_prompt=get_task_summarize_prompt([trajectory])
+        old_objectives=self._old_retrival.retrieve_objectives(task)
+        system_prompt,user_prompt=get_task_summarize_prompt([trajectory],old_objectives)
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -223,8 +233,21 @@ def test(config):
     from torch.utils.data import DataLoader
     from verl.utils.dataset.rl_dataset import collate_fn as default_collate_fn
     
+    class OldRetrival(TaskObjectiveRetrieval):
+        def __init__(self):
+            self._t=[]
+        
+        @override
+        def retrieve_objectives(self, task: Task) -> list[TaskObjective]:
+            return self._t
+        
+        @override
+        def add_objective(self, objective: TaskObjective):
+            self._t.append(objective)
+        
+    oldr=OldRetrival()
     tokenizer=transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct", trust_remote_code=True)
-    manager=TaskManager(config,DashScopeClient(),tokenizer=tokenizer,env_service_url="http://localhost:8000",max_explore_step=3,max_llm_retries=3,num_explore_threads=2,n=2)
+    manager=TaskManager(config,DashScopeClient(),oldr,tokenizer=tokenizer,env_service_url="http://localhost:8000",max_explore_step=5,max_llm_retries=3,num_explore_threads=2,n=2)
     task=Task(task_id="0a9d82a_1",env_type="appworld")
     tasks=[task]*100
     dataset=manager.get_dataset(iter(tasks),bs=1,tokenizer=tokenizer,config=config)

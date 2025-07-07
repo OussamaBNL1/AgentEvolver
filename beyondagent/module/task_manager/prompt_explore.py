@@ -1,4 +1,6 @@
-from typing import Optional
+from typing import Optional, Sequence
+
+from beyondagent.schema.task import Task, TaskObjective
 
 
 AGENT_INTERACTION_SYSTEM_PROMPT = """
@@ -19,6 +21,14 @@ Ensure the chosen action is within the user-defined set of actions.
 
 Please follow the user-defined action format. If there is no action format, you can use the format you prefer.
 
+## Old Objectives:
+
+You have already explored the following objectives:
+
+{old_objectives}
+
+Please avoid repeating the objectives in the current exploration.
+
 ## Instructions:
 
 Do not focus on the task at hand but instead are keen on discovering and executing actions within the allowed set of options provided.
@@ -30,6 +40,17 @@ Carefully read the environment description and task instructions.
 Ensure that the action is in the correct format. If the action is invalid, verify that it is properly formatted.
 
 """
+
+def get_agent_interaction_system_prompt(task: Task, old_objectives: Sequence[TaskObjective]) -> str:
+    """获取环境交互系统提示"""
+    objectives:list[str]=[]
+    for ob in old_objectives:
+        if isinstance(ob.objective,str):
+            objectives.append(ob.objective)
+        else:
+            objectives.extend(ob.objective)
+            
+    return AGENT_INTERACTION_SYSTEM_PROMPT.format(old_objectives="\n".join(objectives))
 
 def parse_action_from_response(response: str) -> str:
     """从响应中解析动作"""
@@ -54,3 +75,9 @@ def parse_action_from_response(response: str) -> str:
         return "invalid action"  # 默认动作
     except Exception:
         return "invalid action"  # 默认动作
+    
+    
+__all__=[
+    "get_agent_interaction_system_prompt",
+    "parse_action_from_response"
+]
