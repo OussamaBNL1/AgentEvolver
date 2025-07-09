@@ -25,6 +25,7 @@ from copy import deepcopy
 from pprint import pprint
 from typing import List
 
+from loguru import logger
 import numpy as np
 import ray
 import torch
@@ -216,10 +217,20 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             num_explore_threads=self.config.task_manager.num_explore_threads,
             n=self.config.task_manager.n,
         )
-        train_dataset=self.task_manager.get_dataset(tasks=self._train_tasks,bs=self.config.task_manager.bs,tokenizer=self.tokenizer,config=self.config.data)
+        if self.config.task_manager.persistent_filepath is None:
+            # if no persistent file, we just use the on-the-fly dataset.
+            # training data is freshly generated every time.
+            logger.info("use persistent task manager")
+            train_dataset=self.task_manager.get_dataset(tasks=self._train_tasks,bs=self.config.task_manager.bs,tokenizer=self.tokenizer,config=self.config.data)
+            train_sampler=self._train_sampler
+        else:
+            # or we just generate data once and always use it
+            logger.info("use on-the-fly task manager")
+            train_dataset=self.task_manager.load_persistent_dataset(tasks=self._train_tasks,filepath=self.config.task_manager.persistent_filepath,tokenizer=self.tokenizer,config=self.config.data,processor=self.processor)
+            train_sampler=None
         # reinit dataloader to use the new dataset
         # sampler must be None
-        self._create_dataloader(train_dataset,self.val_dataset,self._collate_fn,None)
+        self._create_dataloader(train_dataset,self.val_dataset,self._collate_fn,train_sampler)
     
     
     def _create_dataloader(self, train_dataset, val_dataset, collate_fn, train_sampler):
@@ -265,7 +276,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             collate_fn=collate_fn,
         )
         
-        # train dataloader is on-fly, so we don't need to check the size
+        # train dataloader is on-the-fly, so we don't need to check the size
         # assert len(self.train_dataloader) >= 1, "Train dataloader is empty!"
         assert len(self.val_dataloader) >= 1, "Validation dataloader is empty!"
 

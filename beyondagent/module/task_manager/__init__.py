@@ -19,9 +19,11 @@ import hydra
 from loguru import logger
 from omegaconf import DictConfig
 from torch.utils.data import IterableDataset
+from tqdm import tqdm
 from beyondagent.client.llm_client import DashScopeClient
 from beyondagent.module.agent_flow.agent_flow import AgentFlow
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
+from beyondagent.module.task_manager import adapter
 from beyondagent.module.task_manager.adapter import OnflyRlDataset, to_rl_dataset
 from beyondagent.module.task_manager.env_worker import EnvWorker
 from beyondagent.module.task_manager.filters import TaskPostFilter
@@ -35,6 +37,7 @@ from beyondagent.module.task_manager.prompt_summarize import (
 from beyondagent.module.task_manager.protocols import LlmClient, TaskObjectiveRetrieval
 from beyondagent.schema.task import Task, TaskObjective
 from beyondagent.schema.trajectory import Trajectory
+from verl.utils.dataset.rl_dataset import RLHFDataset
 
 
 class TaskManagerProps(TypedDict):
@@ -87,13 +90,12 @@ class TaskManager(object):
     def register_filter(self, filter: TaskPostFilter):
         self._filters.append(filter)
 
-    def generate_task(self, tasks: Sequence[Task]) -> list[TaskObjective]:
+    def generate_task(self, tasks: Sequence[Task],*,show_progress=False) -> list[TaskObjective]:
         task_q = list(copy.copy(tasks)) * self._n
         res = []
         # 每次最多探索所有不同任务，或者最大线程个任务，防止同批次中生成相同任务
         parallel_num = min(self._num_exploration_threads, len(tasks))
-        for i in range(0, len(task_q), parallel_num):
-            # TODO: 把已经有的 task 加入 experience，阻止再次探索重复任务
+        for i in tqdm(range(0, len(task_q), parallel_num), disable=not show_progress):
             trajectories = self._step_explore_batch(task_q[i : i + parallel_num])
             task_objectives = self._step_summarize_batch(
                 task_q[i : i + parallel_num], trajectories
@@ -113,7 +115,7 @@ class TaskManager(object):
             tasks: Iterable[Task]
             bs: int. 该 batch size 决定一次读取的 task 数量。每次生成的 dataset 大小为 bs * self._n。
             tokenizer: transformers.tokenization_utils.PreTrainedTokenizer
-            config: DictConfig
+            config: DictConfig. Only for RLHFDataset.
         """
         fa = self
         
@@ -161,6 +163,22 @@ class TaskManager(object):
                 return next(self._dataset)
 
         return AutoReloadDataset(bs)
+    
+    def load_persistent_dataset(self,tasks:Sequence[Task],filepath:str,*,config,tokenizer,processor)->RLHFDataset:
+        """保持任务探索结果不变的数据集。探索一次后保存到文件，后续再加载。
+        """
+        if not os.path.exists(filepath):
+            logger.info("no persistent file, exploring tasks. this will take a while...")
+            objectives=self.generate_task(tasks,show_progress=True)
+            with open(filepath,"w") as f:
+                json.dump(objectives,f)
+        else:
+            logger.info("loading persistent file...")
+            with open(filepath,"r") as f:
+                objectives=json.load(f)
+        
+        return adapter.to_rl_dataset(objectives,tokenizer=tokenizer,config=config,processor=processor)
+    
 
     def _step_explore_batch(self, tasks: Sequence[Task]):
         with ThreadPoolExecutor(max_workers=self._num_exploration_threads) as executor:
