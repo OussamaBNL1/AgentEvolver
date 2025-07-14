@@ -21,6 +21,54 @@ from beyondagent.module.trainer.ba_async_llm_server_manager import BaAsyncLLMSer
 from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory, Sample
 
+def _locate_template_positions(tokens: list[int], tpl: list[int]) -> list[int]:
+    """返回所有 tpl 在 tokens 中出现的位置索引"""
+    pos, out = 0, []
+    L = len(tpl)
+    while pos <= len(tokens) - L:
+        if tokens[pos : pos + L] == tpl:
+            out.append(pos)
+            pos += L
+        else:
+            pos += 1
+    return out
+
+
+def _split_steps_and_ids(
+    response_ids: list[int],
+    tokenizer,
+    assistant_body_start_idxs: list[int],
+    human_start_idxs: list[int],
+):
+    """
+    · assistant_body_start_idxs: 真实“助手正文”起点索引（已跳过 <assistant> 模板）
+    · human_start_idxs         : <user> 模板起点索引
+    返回:
+        step_ids   – 与 response_ids 等长；属于第 k 个助手 step → k；其余 → -1
+        step_texts – 顺序保存每个助手 step 的纯文本
+    """
+    step_ids   = [-1] * len(response_ids)
+    step_texts = []
+
+    markers = (
+        [(i, "assistant") for i in assistant_body_start_idxs] +
+        [(i, "human")     for i in human_start_idxs] +
+        [(len(response_ids), "end")]
+    )
+    markers.sort(key=lambda x: x[0])
+
+    k = 0
+    for m, (idx, typ) in enumerate(markers):
+        if typ != "assistant":
+            continue
+        nxt = markers[m + 1][0]
+        for t in range(idx, nxt):
+            step_ids[t] = k
+        step_texts.append(tokenizer.decode(response_ids[idx:nxt], skip_special_tokens=True))
+        k += 1
+
+    return step_ids, step_texts
+
 
 class ParallelEnvManager(object):
     def __init__(self, config: DictConfig, async_rollout_manager: BaAsyncLLMServerManager, max_parallel: int,
@@ -128,9 +176,11 @@ class ParallelEnvManager(object):
         """Convert trajectories to DataProto"""
         # Step 1: Convert trajectories to samples: tokenizing
         samples = self.trajectories_to_samples(trajectories)
-
+        
         # Step 2: Convert samples to DataProto: padding
         dataproto = self.samples_to_dataproto(samples)
+                                # list[list[str]]
+
         
         return dataproto
     
@@ -232,6 +282,8 @@ class ParallelEnvManager(object):
 
     def samples_to_dataproto(self, samples: list[Sample]) -> DataProto:
         # Initialize lists to store batched data
+        step_ids_list  = []
+        steps_texts_list = []           
         prompt_ids, response_ids = [], []
         prompt_attention_mask, response_attention_mask = [], []
         prompt_position_ids, response_position_ids = [], []
@@ -261,6 +313,21 @@ class ParallelEnvManager(object):
                     f"Sample {sample.request_id} has response_ids length {len(sample.response_ids)} "
                     f"greater than max_response_length {self.config.data.max_response_length}."
                 )
+            # ------------- shuchang 0714: append step_ids and steps_texts ------------
+            resp_ids = sample.response_ids
+            assistant_tpl = self.response_template_ids
+            human_tpl     = self.instruction_template_ids
+
+            assistant_starts = [
+                pos + len(assistant_tpl)
+                for pos in _locate_template_positions(resp_ids, assistant_tpl)
+            ]
+            human_starts = _locate_template_positions(resp_ids, human_tpl)
+            step_ids, step_texts = _split_steps_and_ids(
+                resp_ids, self.tokenizer, assistant_starts, human_starts
+            )
+            step_ids_list.append(torch.tensor(step_ids, dtype=torch.long))
+            steps_texts_list.append(step_texts)
 
             # Append tensors to respective lists
             prompt_ids.append(torch.tensor(sample.prompt_ids, dtype=torch.int))
@@ -279,6 +346,14 @@ class ParallelEnvManager(object):
             reward_scores.append(sample.reward_scores)
 
         # Batch and pad sequences
+        # ------------- shuchang 0714: pad step_ids and steps_texts ------------
+        step_ids_pad = pad_sequence(
+            step_ids_list, batch_first=True, padding_value=-1
+        )
+        step_ids_pad = pad_sequence_to_length(
+            step_ids_pad, self.config.data.max_response_length, -1
+        )
+        # ------------- shuchang 0714: pad step_ids and steps_texts ------------
         prompt_ids = pad_sequence(prompt_ids, batch_first=True, padding_value=self.pad_token_id, padding_side="left")
         prompt_ids = pad_sequence_to_length(prompt_ids, self.config.data.max_prompt_length, self.pad_token_id, left_pad=True)
 
@@ -322,8 +397,9 @@ class ParallelEnvManager(object):
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
                 "loss_mask": loss_mask,
+                "step_ids": step_ids_pad,
             },
             batch_size=len(samples),
         )
 
-        return DataProto(batch=batch, non_tensor_batch={"messages": np.array(messages), "reward_scores": np.array(reward_scores)})
+        return DataProto(batch=batch, non_tensor_batch={"messages": np.array(messages), "reward_scores": np.array(reward_scores), "steps": np.array(steps_texts_list, dtype=object)})
