@@ -56,7 +56,7 @@ python3 -m beyondagent.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='ba-taskmanager' \
-    trainer.experiment_name='qwen25_3b-taskmanager-debug' \
+    trainer.experiment_name='qwen25_3b-taskmanager-synthetic_original' \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=10 \
