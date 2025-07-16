@@ -18,6 +18,7 @@ from best_logger import register_logger
 from beyondagent.client.llm_client import DashScopeClient
 from beyondagent.module.task_manager.base import NaiveTaskObjectiveRetrieval
 from beyondagent.module.task_manager.data_mixture import OriginalOnlyStrategy, UnifiedMixtureStrategy
+from beyondagent.module.task_manager.strategies.random import LlmRandomSamplingExploreStrategy
 from beyondagent.module.task_manager.task_manager import TaskManager
 
 non_console_mods = ["appworld_io"]
@@ -185,8 +186,15 @@ class TaskRunner:
         
         # init task manager
         llm_client=DashScopeClient(model_name=config.task_manager.llm_client)
+        assert config.task_manager.strategy == "random", "only random strategy is supported now"
+        strategy=LlmRandomSamplingExploreStrategy(
+            tokenizer=tokenizer,
+            config=config,
+            **config.task_manager.strategy_args
+        )
         train_task_manager=TaskManager(
             config=config,
+            exploration_strategy=strategy,
             llm_client=llm_client, # or use policy model
             old_retrival=NaiveTaskObjectiveRetrieval(),
             mixture_strategy=UnifiedMixtureStrategy(
@@ -197,24 +205,21 @@ class TaskRunner:
                 ),
             tokenizer=tokenizer,
             env_service_url=config.env_service.env_url,
-            max_llm_retries=config.task_manager.max_llm_retries,
-            max_explore_step=config.task_manager.max_explore_step,
             num_explore_threads=config.task_manager.num_explore_threads,
             n=config.task_manager.n,
-            task_summary_history_length=config.task_manager.task_summary_history_length,
+            mix_original_tasks=config.task_manager.mix_original_tasks
         )
         val_task_manager=TaskManager(
             config=config,
+            exploration_strategy=strategy,
             llm_client=llm_client, # or use policy model
             old_retrival=NaiveTaskObjectiveRetrieval(),
             mixture_strategy=OriginalOnlyStrategy(),
             tokenizer=tokenizer,
             env_service_url=config.env_service.env_url,
-            max_llm_retries=config.task_manager.max_llm_retries,
-            max_explore_step=config.task_manager.max_explore_step,
             num_explore_threads=config.task_manager.num_explore_threads,
             n=config.task_manager.n,
-            task_summary_history_length=config.task_manager.task_summary_history_length,
+            mix_original_tasks=config.task_manager.mix_original_tasks
         )
         trainer = BeyondAgentRayPPOTrainer(
             config=config,

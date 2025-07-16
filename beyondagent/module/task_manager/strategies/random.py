@@ -17,19 +17,24 @@ from beyondagent.module.task_manager.prompts.prompt_summarize import (
 )
 
 class LlmRandomSamplingExploreStrategyProps(TypedDict):
+    max_explore_step: int
+    max_llm_retries: int
+    env_url: str
     exploration_llm_temperature: NotRequired[float]
     exploration_llm_top_p: NotRequired[float]
     exploration_llm_top_k: NotRequired[int]
     task_summary_history_length: NotRequired[int]
     
+    
 
 class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
-    def __init__(self, env_service_url: str,max_llm_retries: int, max_explore_step: int,* , tokenizer, config,**kwargs: Unpack[LlmRandomSamplingExploreStrategyProps]):
-        self._max_llm_retries = max_llm_retries
-        self._max_explore_step = max_explore_step
-        self._env_service_url = env_service_url
+    def __init__(self, * , tokenizer, config,**kwargs: Unpack[LlmRandomSamplingExploreStrategyProps]):
         self._tokenizer = tokenizer
         self._config = config
+        
+        self._max_llm_retries = kwargs.get("max_llm_retries", 3)
+        self._max_explore_step = kwargs.get("max_explore_step", 10)
+        self._env_service_url = kwargs.get("env_url")
         
         self._exploration_llm_temperature=kwargs.get("exploration_llm_temperature", 1.0)
         self._exploration_llm_top_p=kwargs.get("exploration_llm_top_p", 1.0)

@@ -42,10 +42,8 @@ from beyondagent.schema.trajectory import Trajectory
 from verl.utils.dataset.rl_dataset import RLHFDataset
 
 class TaskManagerProps(TypedDict):
-    max_llm_retries: int
-    max_explore_step: int
     num_explore_threads: int
-    n: int
+    n: int # 重复探索的控制必须放在这里，task manager 要规划 task 执行顺序，避免在同时探索相同任务导致潜在的 query 重复
     
     exploration_llm_temperature: NotRequired[float]
     exploration_llm_top_p: NotRequired[float]
@@ -76,17 +74,8 @@ class TaskManager(object):
         self._mixture_strategy = mixture_strategy
         self._env_service_url = env_service_url
         self._tokenizer = tokenizer  # cc: 这玩意似乎不该在这
-        self._max_llm_retries = kwargs["max_llm_retries"] or 3
-        self._max_explore_step = kwargs["max_explore_step"] or 10
         self._num_exploration_threads = kwargs["num_explore_threads"] or 10
         self._n = kwargs["n"]
-        
-        self._exploration_llm_temperature = kwargs.get(
-            "exploration_llm_temperature", 1.0
-        )
-        self._exploration_llm_top_p = kwargs.get("exploration_llm_top_p", 1.0)
-        self._exploration_llm_top_k = kwargs.get("exploration_llm_top_k", 1)
-        self._task_summary_history_length = kwargs.get("task_summary_history_length", self._max_explore_step)
 
         self._filters: list[TaskPostFilter] = []
         
@@ -212,44 +201,6 @@ class TaskManager(object):
         """
         return self._exploration_strategy.summarize(task, trajectory)
 
-
-    def _get_llm_chat_fn(self, sampling_params: Optional[dict] = None) -> Callable:
-        def llm_chat(
-            messages: list[dict[str, str]],
-            custom_sampling_params: Optional[dict] = None,
-            request_id: Optional[str] = None,
-        ) -> dict:
-            """
-            input messages: [{"role": "system", "value": "..."}, {"role": "user", "value": "..."}]
-            output messages: [{"role": "assistant", "value": "..."}]
-            """
-            updated_sampling_params = {}
-            if sampling_params:
-                updated_sampling_params.update(sampling_params)
-            if custom_sampling_params:
-                updated_sampling_params.update(custom_sampling_params)
-
-            # output_messages = []
-            input_messages = copy.deepcopy(messages)
-            res = None
-            for i in range(self._max_llm_retries):
-                try:
-                    res = self._llm_client.chat(
-                        messages=input_messages, sampling_params=updated_sampling_params
-                    )
-                    break
-
-                except Exception as e:
-                    logger.exception(f"rollout_server.{i} error: {e.args}")
-                    time.sleep(i + 1)
-
-            assert res is not None, f"LLM client failed to chat"
-            return {
-                "role": "assistant",
-                "content": res,
-            }
-
-        return llm_chat
 
 
 class FullDataset(Dataset):
