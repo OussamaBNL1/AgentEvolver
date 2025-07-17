@@ -109,7 +109,7 @@ class AgentFlow(BaseAgentFlow):
             if trajectory.is_terminated:
                 break
         
-        score = env.evaluate(instance_id, params={"sparse": False})
+        score = env.evaluate(instance_id, params={"sparse": self.config.env_sparse})
         trajectory.reward.outcome = score
         trajectory.reward.description = "Outcome 1 = success, 0 = failure."
 
