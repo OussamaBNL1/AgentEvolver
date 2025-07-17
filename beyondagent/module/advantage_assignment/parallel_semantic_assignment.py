@@ -211,7 +211,7 @@ async def evaluate_step_flags_parallel(tokenizer,
     # 🔧 修复：使用loss_mask而不是response_mask
     response_length = batch.batch["responses"].size(1)
     loss_mask = batch.batch["loss_mask"][:, -response_length:]  # 取response部分的loss_mask
-    
+
     for sample_idx in range(batch_size):
         query = tokenizer.decode(batch.batch["prompts"][sample_idx], skip_special_tokens=True)
         rollout = tokenizer.decode(batch.batch["responses"][sample_idx], skip_special_tokens=True)
