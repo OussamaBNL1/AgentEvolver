@@ -20,11 +20,7 @@ actor_rollout_ref:
     entropy_mask:
       mode: null
       raw: null
-    advantage:
-      mode: semantic
-      good_scale: 1.0
-      bad_scale: 0.2
-      neg_bad_scale: -0.2
+    # 移除旧的 advantage 配置，统一到 semantic_advantage
   rollout:
     name: vllm
     mode: async
@@ -42,7 +38,6 @@ actor_rollout_ref:
     max_env_len: 4096
     enable_request_id: False
 
-
 thread_pool:
   max_workers: 5
 
@@ -58,3 +53,15 @@ experience_maker:
   retrieve_top_k: 3
 
 save_dir: ./save_dir/save_entropy
+
+# 统一的语义优势评估配置 - 所有语义评估相关参数都在这里
+semantic_advantage:
+  enable: false                    # 总开关
+  evaluation_type: "local"           # 🔥 新增：评估类型 ("local" 或 "api")
+  mask_type: "loss_mask"          # mask类型
+  mode: "semantic"                 # 模式
+  good_scale: 1.0                  # 好步骤缩放因子
+  bad_scale: 0.2                   # 坏步骤缩放因子
+  neg_bad_scale: -0.2              # 负面坏步骤缩放因子
+  concurrent: 20                   # 并发处理数量
+  model: "qwen-max"              # 语义评估使用的模型

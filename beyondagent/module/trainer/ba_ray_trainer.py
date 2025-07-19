@@ -201,6 +201,22 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         self.env_manager = ParallelEnvManager(config=self.config, async_rollout_manager=self.async_rollout_manager, max_parallel=self.config.actor_rollout_ref.rollout.max_env_worker)
         self.thread_pool = ThreadPoolExecutor(max_workers=self.config.thread_pool.max_workers)
 
+    def _get_semantic_config(self):
+        """
+        获取语义评估配置 - 支持API重试配置
+        """
+        if not hasattr(self.config, 'semantic_advantage'):
+            raise ValueError("semantic_advantage configuration block is required")
+        
+        config = self.config.semantic_advantage
+        
+        # 设置默认的API重试次数
+        if not hasattr(config, 'api_max_retries'):
+            config.api_max_retries = 200  # 默认200次重试
+            print(f"[semantic_config] Using default api_max_retries: {config.api_max_retries}")
+        
+        return config
+
     def _validate_config(self):
         # 0623 yunpeng add. keep the same as the original func except for the param of tool_config_path
         config = self.config
@@ -321,7 +337,6 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             # assert config.actor_rollout_ref.rollout.multi_turn.tool_config_path is not None or config.actor_rollout_ref.rollout.multi_turn.interaction_config_path is not None, "tool_config_path or interaction_config_path must be set when enabling multi_turn with tool, due to no role-playing support"
             assert config.algorithm.adv_estimator in [AdvantageEstimator.GRPO], "only GRPO is tested for multi-turn with tool"
 
-        print("[validate_config] All configuration checks passed successfully!")
     def _validate(self):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
@@ -495,7 +510,9 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         # we start from step 1
         self.global_steps += 1
         last_val_metrics = None
-
+        # # TODO shuchang 尝试在fit函数中添加让manager
+        # self.async_rollout_manager.wake_up()
+        # self.async_rollout_manager.sleep()
         for epoch in range(self.config.trainer.total_epochs):
             for i, batch_dict in enumerate(self.train_dataloader):
                 metrics = {}
@@ -700,12 +717,12 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                         # apply_step_mask(
                         #     batch        = batch,
                         #     step_flags   = step_flags,
-                        #     good_scale   = self.config.actor_rollout_ref.actor.advantage.good_scale,
-                        #     bad_scale    = self.config.actor_rollout_ref.actor.advantage.bad_scale,
-                        #     neg_bad_scale = self.config.actor_rollout_ref.actor.advantage.neg_bad_scale,
+                        #     good_scale   = semantic_config.good_scale,
+                        #     bad_scale    = semantic_config.bad_scale,
+                        #     neg_bad_scale = semantic_config.neg_bad_scale,
                         # )                  # breakpoint()
                         # print("$$$$$$$$$$$$$$$$$$$$ ")
-
+                        
                         if self.global_steps <= 3:
                             print(f"\n🔍 [DEBUG STEP {self.global_steps}] Advantage Structure Check")
                             print("-" * 60)
@@ -737,37 +754,64 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             
                             print(f"🔍 [Zero Advantage] {zero_count}/{len(batch)} samples have advantage≈0 (using loss_mask)")
                             print("-" * 60)
+                            
+                        # 🔧 统一的语义评估配置访问
+                        semantic_config = self._get_semantic_config()
+                        enable_semantic_eval = semantic_config.enable
                         
-                        print("^^^^^^^^^^^^^^^^^ start parallel semantic processing")
-                        from beyondagent.module.advantage_assignment.parallel_semantic_assignment import (
-                            ParallelSemanticProcessor
-                        )
-
-                        # 创建处理器（可以作为类成员变量避免重复创建）
-                        if not hasattr(self, '_semantic_processor'):
-                            self._semantic_processor = ParallelSemanticProcessor(
-                                max_concurrent=self.config.get("semantic_eval_concurrent", 20),
-                                model_name=self.config.get("semantic_eval_model", "qwen-max")
+                        if enable_semantic_eval:
+                            print("^^^^^^^^^^^^^^^^^ start parallel semantic processing")
+                            print(f"[Config] Semantic evaluation config: {semantic_config}")
+                            
+                            from beyondagent.module.advantage_assignment.parallel_semantic_assignment import (
+                                ParallelSemanticProcessor
                             )
 
-                        semantic_stats = self._semantic_processor.process_batch_sync(
-                            tokenizer=self.tokenizer,
-                            batch=batch,
-                            good_scale=self.config.actor_rollout_ref.actor.advantage.good_scale,
-                            bad_scale=self.config.actor_rollout_ref.actor.advantage.bad_scale,
-                            neg_bad_scale=self.config.actor_rollout_ref.actor.advantage.neg_bad_scale,
-                        )
+                            # 创建处理器（可以作为类成员变量避免重复创建）
+                            if not hasattr(self, '_semantic_processor'):
+                                self._semantic_processor = ParallelSemanticProcessor(
+                                    max_concurrent=semantic_config.concurrent,
+                                    model_name=semantic_config.model,
+                                    evaluation_type=semantic_config.evaluation_type  # 🔧 新增：支持评估类型
+                                    api_max_retries=getattr(semantic_config, 'api_max_retries', 200)  # 支持配置重试次数
+                                )
+                            # 根据配置选择mask类型
+                            response_length = batch.batch["responses"].size(1)
+                            mask_type = semantic_config.mask_type
+                            
+                            print(f"[semantic_eval] Using mask type: {mask_type}")
+                            print(f"[semantic_eval] Using evaluation type: {semantic_config.evaluation_type}")
+                            
+                            if mask_type == "response_mask":
+                                selected_mask = batch.batch["response_mask"]
+                                print(f"[semantic_eval] response_mask shape: {selected_mask.shape}")
+                            elif mask_type == "loss_mask":
+                                selected_mask = batch.batch["loss_mask"][:, -response_length:]
+                                print(f"[semantic_eval] loss_mask shape: {selected_mask.shape}")
+                            else:
+                                supported_types = ["response_mask", "loss_mask"]
+                                raise ValueError(f"Unsupported mask_type: '{mask_type}'. Supported types: {supported_types}")
+                            
+                            # 使用统一的配置获取缩放参数
+                            semantic_stats = self._semantic_processor.process_batch_sync(
+                                tokenizer=self.tokenizer,
+                                batch=batch,
+                                good_scale=semantic_config.good_scale,
+                                bad_scale=semantic_config.bad_scale,
+                                neg_bad_scale=semantic_config.neg_bad_scale,
+                                mask_tensor=selected_mask, 
+                            )
 
-                        # 添加到metrics中
-                        metrics.update({
-                            "semantic_eval/total_time": semantic_stats["total_processing_time"],
-                            "semantic_eval/api_time": semantic_stats["evaluation_time"],
-                            "semantic_eval/mask_time": semantic_stats["mask_application_time"],
-                            "semantic_eval/good_steps": semantic_stats["mask_stats"]["good_steps"],
-                            "semantic_eval/bad_steps": semantic_stats["mask_stats"]["bad_steps"],
-                        })
+                            # 添加到metrics中
+                            metrics.update({
+                                "semantic_eval/total_time": semantic_stats["total_processing_time"],
+                                "semantic_eval/api_time": semantic_stats["evaluation_time"],
+                                "semantic_eval/mask_time": semantic_stats["mask_application_time"],
+                                "semantic_eval/good_steps": semantic_stats["mask_stats"]["good_steps"],
+                                "semantic_eval/bad_steps": semantic_stats["mask_stats"]["bad_steps"],
+                            })
 
-                        print("^^^^^^^^^^^^^^^^^ end parallel semantic processing")
+                            print("^^^^^^^^^^^^^^^^^ end parallel semantic processing")
                         # # ===========  0714 shuchang: add semantic mask  =========== 
                         # # ---------------- token-entropy logging ----------------
                         # responses       = batch.batch["responses"]         # (bs, resp_len)
@@ -795,7 +839,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                         #     mode          = mode,
                         # )
 
-                        # batch.batch["response_mask"] = entropy_mask           # 覆盖为“高熵”版本
+                        # batch.batch["response_mask"] = entropy_mask           # 覆盖为"高熵"版本
                         # metrics.update({                                       # 记录诊断指标（可选）
                         #     "actor/tau_pos": tau[0] if tau else 0.0,
                         #     "actor/tau_neg": tau[1] if tau else 0.0,
