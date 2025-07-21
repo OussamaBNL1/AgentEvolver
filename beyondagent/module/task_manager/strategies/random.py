@@ -86,6 +86,8 @@ class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
             {"role": "user", "content": user_prompt},
         ]
         llm_output = llm_fn(messages=messages)["content"]
+        task=task.copy()
+        task.evaluator='synthetic'
         tasks = parse_tasks_from_response(task, llm_output)
         return tasks
     
