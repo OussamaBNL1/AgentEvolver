@@ -44,6 +44,7 @@ thread_pool:
 env_service:
   env_type: "appworld"
   env_url: "http://127.0.0.1:8000"
+env_sparse: False
 
 experience_maker:
   base_url: "http://127.0.0.1:8001"
