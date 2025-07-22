@@ -4,7 +4,6 @@ from typing import Callable, NotRequired, Optional, Sequence, TypedDict, Unpack
 
 from loguru import logger
 
-from beyondagent.module.agent_flow.agent_flow import AgentFlow
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.module.task_manager.explorer import Explorer
 from beyondagent.module.task_manager.strategies.random.prompts.prompt_explore import get_agent_interaction_system_prompt
@@ -16,7 +15,8 @@ from beyondagent.module.task_manager.strategies import TaskExploreStrategy
 from beyondagent.schema.task import Task, TaskObjective
 from beyondagent.schema.trajectory import Trajectory
 
-from .embedding import EmbeddingClient
+from .embedding import StateRecorder
+from .controlled_agent_flow import ControlledAgentFlow
 
 
 class LlmDedupExploreStrategyProps(TypedDict):
@@ -44,7 +44,7 @@ class LlmDedupSamplingExploreStrategy(TaskExploreStrategy):
         self._exploration_llm_top_k=kwargs.get("exploration_llm_top_k", 1)
         self._task_summary_history_length=kwargs.get("task_summary_history_length", self._max_explore_step)
         
-        self._embedding=EmbeddingClient()
+        self._state_recorder=StateRecorder(similarity_threshold=0.8) # TODO
         
     
     def explore(self, task: Task, data_id: str, rollout_id: str) -> list[Trajectory]:
@@ -61,8 +61,8 @@ class LlmDedupSamplingExploreStrategy(TaskExploreStrategy):
                 "top_k": self._exploration_llm_top_k,
             }
         )
-        agent_flow: BaseAgentFlow = AgentFlow(
-            enable_context_generator=False,
+        agent_flow: BaseAgentFlow = ControlledAgentFlow(
+            state_recorder=self._state_recorder,
             llm_chat_fn=llm_chat_fn,
             tokenizer=self._tokenizer,
             config=self._config,

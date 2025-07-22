@@ -31,10 +31,7 @@ from beyondagent.module.task_manager.adapter import OnflyRlDataset, to_rl_datase
 from beyondagent.module.task_manager.data_mixture import MixtureStrategy, OriginalOnlyStrategy
 from beyondagent.module.task_manager.strategies import TaskExploreStrategy
 from beyondagent.module.task_manager.explorer import Explorer
-from beyondagent.module.task_manager.filters import TaskPostFilter
-from beyondagent.module.task_manager.prompts.prompt_explore import (
-    get_agent_interaction_system_prompt,
-)
+from beyondagent.module.task_manager.filters import NaiveTaskPostFilter, TaskPostFilter
 
 from beyondagent.module.task_manager.base import LlmClient, TaskObjectiveRetrieval
 from beyondagent.schema.task import Task, TaskObjective
@@ -70,7 +67,7 @@ class TaskManager(object):
         self._num_exploration_threads = kwargs["num_explore_threads"] or 10
         self._n = kwargs["n"]
 
-        self._filters: list[TaskPostFilter] = []
+        self._filters: list[TaskPostFilter] = [NaiveTaskPostFilter()]
         
         self._tasks: list[Task]=[]
         self._exploration_strategy._inject_deps(self._old_retrival,self._llm_client)
@@ -160,9 +157,12 @@ class TaskManager(object):
                 ]
                 task_objectives = sum([future.result() for future in futures], [])
                 res.extend(task_objectives)
-
-        # post filter
-        res = functools.reduce(lambda x, f: f.filter(x), self._filters, res)
+                # post filter
+                res = functools.reduce(lambda x, f: f.filter(x), self._filters, res)
+                self._old_retrival.reset()
+                for i in res:
+                    self._old_retrival.add_objective(i)
+                
         
         random.shuffle(res) # shuffle
 
@@ -232,8 +232,9 @@ class FullDataset(Dataset):
     
     def save_to_file(self, filepath: str):
         """保存objectives到文件"""
+        objectives_without_origins=list(filter(lambda x:x.task.evaluator!="env",self._objectives))
         with open(filepath, "w") as f:
-            f.writelines([ob.json() + "\n" for ob in self._objectives])
+            f.writelines([ob.json() + "\n" for ob in objectives_without_origins])
         logger.info(f"Saved {len(self._objectives)} objectives to {filepath}")
     
     def load_from_file(self, filepath: str):

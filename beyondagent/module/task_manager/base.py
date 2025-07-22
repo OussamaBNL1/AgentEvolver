@@ -18,6 +18,9 @@ class TaskObjectiveRetrieval(abc.ABC):
 
     @abc.abstractmethod
     def add_objective(self, objective: TaskObjective): ...
+    
+    @abc.abstractmethod
+    def reset(self):...
 
 
 
@@ -37,3 +40,6 @@ class NaiveTaskObjectiveRetrieval(TaskObjectiveRetrieval):
             self._mp[objective.task.task_id] = []
 
         self._mp[objective.task.task_id].append(objective)
+    
+    def reset(self):
+        self._mp = {}

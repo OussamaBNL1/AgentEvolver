@@ -79,9 +79,9 @@ def get_task_summarize_prompt(
             x += f"## Record {idx}\n"
             x += f"### History\n"
             for history in histories:
-                x += f"{history[0]}\n->\n{history[1]}\n\n"
-            x += f"### Action\n{v[0]}\n"
-            x += f"### Observation\n{v[1]}\n"
+                x += f"assistant:\n{history[0]}\n->\nobservation:{history[1]}\n\n"
+            x += f"### Latest Action\n{v[0]}\n"
+            x += f"### Latest Observation\n{v[1]}\n"
             x += f"### Reward: {traj.reward.outcome}\n{traj.reward.description}\n"
             idx += 1
 
@@ -89,8 +89,6 @@ def get_task_summarize_prompt(
     for ob in old_objectives:
         if isinstance(ob.objective, str):
             objectives.append(ob.objective)
-        else:
-            objectives.extend(ob.objective)
 
     user_prompt = f"""Please analyze the following agent interaction sequence and abstract specific tasks from it:
 

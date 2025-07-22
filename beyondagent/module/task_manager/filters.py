@@ -21,9 +21,8 @@ class NaiveTaskPostFilter(TaskPostFilter):
 
         for i, task in enumerate(tasks):
             # 简化查询用于去重比较
-            query = (
-                task.objective if isinstance(task.objective, str) else task.objective[0]
-            )
+            query = task.objective
+            assert query is not None
             normalized_query = (
                 query.lower().strip()
             )  # FIXME: this only supports English

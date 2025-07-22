@@ -21,14 +21,6 @@ Ensure the chosen action is within the user-defined set of actions.
 
 Please follow the user-defined action format. If there is no action format, you can use the format you prefer.
 
-## Actions Already Explored:
-
-You have already explored the following actions in the past:
-
-{explored_states}
-
-You should think twice, consider if the action could lead to a unknown place that is valuable to users, and then choose to repeat or avoid exploring them.
-
 
 ## Instructions:
 
@@ -44,14 +36,10 @@ Ensure that the action is in the correct format. If the action is invalid, verif
 
 
 def get_agent_interaction_system_prompt(
-    task: Task, explored_states: Sequence[StateRecord]
+    task: Task
 ) -> str:
     """获取环境交互系统提示"""
-    objectives: list[str] = []
-    for ob in explored_states:
-        raise NotImplementedError("TODO")
-
-    return AGENT_INTERACTION_SYSTEM_PROMPT.format(old_objectives="\n".join(objectives))
+    return AGENT_INTERACTION_SYSTEM_PROMPT.format()
 
 
 
