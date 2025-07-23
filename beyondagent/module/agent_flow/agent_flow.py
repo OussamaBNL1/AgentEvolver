@@ -16,7 +16,6 @@ class AgentFlow(BaseAgentFlow):
 
     def __init__(self,reward_calculator:Optional[RewardCalculator]=None, **kwargs):
         super().__init__(**kwargs)
-        # 优先传入的参数
         self._reward_calculator = reward_calculator
         if self._reward_calculator is not None:
             logger.info(f"reward_calculator={self._reward_calculator}")

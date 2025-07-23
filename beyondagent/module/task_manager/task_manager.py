@@ -42,7 +42,6 @@ class TaskManagerProps(TypedDict):
     num_explore_threads: int
     n: int # 重复探索的控制必须放在这里，task manager 要规划 task 执行顺序，避免在同时探索相同任务导致潜在的 query 重复
 
-# TODO: 能够替换的 exploration & extraction (summary) strategy
 
 class TaskManager(object):
 
