@@ -18,12 +18,14 @@ python3 -m beyondagent.main_ppo \
     --config-name='beyond_agent_dataflow' \
     env_service.env_url=$env_url \
     algorithm.adv_estimator=grpo \
-    data.train_batch_size=32 \
+    actor_rollout_ref.actor.loss_agg_mode="token-mean" \
+    data.train_batch_size=16 \
     data.max_prompt_length=4096 \
     data.max_response_length=20480 \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
     data.return_raw_chat=True \
+    actor_rollout_ref.rollout.use_qwen3=False \
     actor_rollout_ref.rollout.enable_request_id=False \
     actor_rollout_ref.rollout.prompt_length=20480 \
     actor_rollout_ref.rollout.response_length=2048 \
@@ -52,13 +54,13 @@ python3 -m beyondagent.main_ppo \
     algorithm.use_kl_in_reward=False \
     trainer.n_gpus_per_node=8 \
     trainer.critic_warmup=0 \
-    trainer.logger=['console','swanlab'] \
-    trainer.project_name='ba-taskmanager' \
-    trainer.experiment_name="qwen25_7b-1o1s" \
+    trainer.logger=['console','wandb'] \
+    trainer.project_name='beyondagent' \
+    trainer.experiment_name="qwen2.5-7b_appworld_aggtoken_sparse_${current_time}_8gpu" \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
-    trainer.test_freq=10 \
-    trainer.total_epochs=50 \
+    trainer.test_freq=20 \
+    trainer.total_epochs=20 \
     trainer.val_before_train=True \
     trainer.validation_data_dir="experiments/exp_${current_time}/validation_log" \
     trainer.rollout_data_dir="experiments/exp_${current_time}/rollout_log" \
@@ -67,13 +69,10 @@ python3 -m beyondagent.main_ppo \
     actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=20480 \
     critic.ppo_max_token_len_per_gpu=20480 \
     critic.forward_max_token_len_per_gpu=20480 \
-    data.train_files=null \
-    data.val_files=null \
+    data.train_files=/mnt/data_cpfs/zouanni.zan/data/appworld_parquet/train.parquet \
+    data.val_files=/mnt/data_cpfs/zouanni.zan/data/appworld_parquet/dev.parquet \
     experience_maker.enable_summarizer=False \
     experience_maker.enable_context_generator=False \
     experience_maker.workspace_id="w1_qwen25_v2_${current_time}" \
-    task_manager.n=0 \
-    task_manager.mixture.synthetic_data_ratio=0.0 \
-    task_manager.mixture.use_original_tasks=True \
     2>&1 | tee "$log_file" \
     $@
