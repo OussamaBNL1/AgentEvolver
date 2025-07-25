@@ -58,7 +58,7 @@ task_manager:
 
   strategy: random
   strategy_args:
-    max_explore_step: 15
+    max_explore_step: 20
     max_llm_retries: 3
     env_url: ${env_service.env_url}
     exploration_llm_temperature: 1.0

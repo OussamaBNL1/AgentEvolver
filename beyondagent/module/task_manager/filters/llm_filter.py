@@ -104,7 +104,7 @@ class LlmFilter(TaskPostFilter):
     def _execute_strategy1(self, task: TaskObjective) -> bool:
         """Execute strategy 1: Simple execution / 执行策略1：简单执行"""
         try:
-            worker = EnvWorker(task.task)
+            worker = EnvWorker(task.task,config=self._config)
             agent_flow = ModifiedAgentFlow(
                 enable_context_generator=False,
                 llm_chat_fn=self._get_llm_chat_fn(),

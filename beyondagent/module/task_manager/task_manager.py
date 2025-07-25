@@ -29,6 +29,7 @@ from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.module.task_manager import adapter
 from beyondagent.module.task_manager.adapter import OnflyRlDataset, to_rl_dataset
 from beyondagent.module.task_manager.data_mixture import MixtureStrategy, OriginalOnlyStrategy
+from beyondagent.module.task_manager.filters.llm_filter import LlmFilter
 from beyondagent.module.task_manager.strategies import TaskExploreStrategy
 from beyondagent.module.task_manager.explorer import EnvWorkerWithPrompt
 from beyondagent.module.task_manager.filters.filters import NaiveTaskPostFilter, TaskPostFilter
@@ -67,7 +68,8 @@ class TaskManager(object):
         self._num_exploration_threads = kwargs["num_explore_threads"] or 10
         self._n = kwargs["n"]
 
-        self._filters: list[TaskPostFilter] = [NaiveTaskPostFilter()]
+        self._realtime_filters: list[TaskPostFilter] = [NaiveTaskPostFilter()]
+        self._post_filter: list[TaskPostFilter] = [LlmFilter(env_service_url,llm_client,self._num_exploration_threads,tokenizer=tokenizer,config=config)]
         
         self._tasks: list[Task]=[]
         self._exploration_strategy._inject_deps(self._old_retrival,self._llm_client)
@@ -98,7 +100,7 @@ class TaskManager(object):
         return len(response)
 
     def register_filter(self, filter: TaskPostFilter):
-        self._filters.append(filter)
+        self._realtime_filters.append(filter)
 
     def get_onthefly_dataset(self, bs: int, tokenizer, config,processor):
         """
@@ -157,13 +159,19 @@ class TaskManager(object):
                 ]
                 task_objectives = sum([future.result() for future in futures], [])
                 res.extend(task_objectives)
-                # post filter
-                res = functools.reduce(lambda x, f: f.filter(x), self._filters, res)
+                # realtime filter
+                res = functools.reduce(lambda x, f: f.filter(x), self._realtime_filters, res)
                 self._old_retrival.reset()
                 for i in res:
                     self._old_retrival.add_objective(i)
                 
-        
+                    
+        # post filter
+        logger.info("running post filter on generated tasks")
+        cnt_before_filter=len(res)
+        res = functools.reduce(lambda x, f: f.filter(x), self._post_filter, res)
+        cnt_after_filter=len(res)
+        logger.info(f"finish post filter: #before={cnt_before_filter}, #after={cnt_after_filter}")
         random.shuffle(res) # shuffle
 
         return res
