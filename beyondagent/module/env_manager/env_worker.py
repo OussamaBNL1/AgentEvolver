@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 
 from omegaconf import DictConfig
@@ -19,7 +20,7 @@ class EnvWorker(object):
         self.instance_id: str = instance_id if instance_id is not None else uuid.uuid4().hex
         self.thread_index: int = thread_index
 
-    def execute(self, data_id: str, rollout_id: str, agent_flow: BaseAgentFlow, **kwargs) -> Trajectory:
+    def execute(self, data_id: str, rollout_id: str, agent_flow: BaseAgentFlow, system_prompt: Optional[str] = None, **kwargs) -> Trajectory:
         trajectory: Trajectory = Trajectory(data_id=data_id, rollout_id=rollout_id, steps=[], query="")
 
         try:
@@ -39,6 +40,9 @@ class EnvWorker(object):
             if self.task.query is not None:
                 assert state_message[-1]["role"] == "user", "the latest message from environment must be user query"
                 state_message[-1]["content"] = self.task.query
+            # insert custom system prompt
+            if system_prompt is not None:
+                state_message.insert(1, {"role": "user", "content": system_prompt})
             trajectory: Trajectory = Trajectory(data_id=data_id,
                                                 rollout_id=rollout_id,
                                                 steps=state_message,

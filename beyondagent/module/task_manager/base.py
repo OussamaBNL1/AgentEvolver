@@ -9,6 +9,10 @@ class LlmClient(Protocol):
         self, messages: list[dict[str, str]], sampling_params: dict[str, Any]
     ) -> str: ...
 
+class LlmRawClient(Protocol):
+    def chat(
+        self, messages: list[dict[str, str]], sampling_params: dict[str, Any]
+    ) -> dict: ...
 
 class TaskObjectiveRetrieval(abc.ABC):
     """支持任务相关任务 objective 检索，用于避免重复探索"""

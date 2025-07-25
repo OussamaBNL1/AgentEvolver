@@ -9,7 +9,8 @@ from beyondagent.schema.trajectory import Trajectory
 from loguru import logger
 
 
-class Explorer(object):
+# TODO replace this with new env worker
+class EnvWorkerWithPrompt(object):
 
     def __init__(
         self,

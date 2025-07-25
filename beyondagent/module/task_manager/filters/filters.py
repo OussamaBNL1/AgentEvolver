@@ -1,13 +1,8 @@
 import abc
 from typing import Sequence
 
+from beyondagent.module.task_manager.filters import TaskPostFilter
 from beyondagent.schema.task import TaskObjective
-
-
-class TaskPostFilter(abc.ABC):
-    @abc.abstractmethod
-    def filter(self, tasks: Sequence[TaskObjective]) -> list[TaskObjective]:
-        pass
 
 
 class NaiveTaskPostFilter(TaskPostFilter):
