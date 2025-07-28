@@ -16,11 +16,12 @@ from beyondagent.utils.utils import convert_tool_to_user_message, clip_state_con
 # I want a extensible AgentFlow rather than patch.
 class ControlledAgentFlow(BaseAgentFlow):
 
-    def __init__(self,state_recorder:StateRecorder,reward_calculator:Optional[RewardCalculator]=None, **kwargs):
+    def __init__(self,state_recorder:StateRecorder,reward_calculator:Optional[RewardCalculator]=None, max_record_len:int=200, **kwargs):
         super().__init__(**kwargs)
         self._state_recorder=state_recorder
         # 优先传入的参数
         self._reward_calculator = reward_calculator
+        self._max_record_len=max_record_len
         if self._reward_calculator is not None:
             logger.info(f"reward_calculator={self._reward_calculator}")
         self._enable_context_generator=False
@@ -33,15 +34,22 @@ class ControlledAgentFlow(BaseAgentFlow):
     def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
         request_id: str = ""
         for act_step in range(self.max_steps):
+            # remove old system prompt
+            new_steps=trajectory.steps.copy()
+            for i in trajectory.steps:
+                if i['role']=='system':
+                    if i['content'].find('In the past interactions at this place, you have output these action and observed these states already:')>=0:
+                        continue
+                new_steps.append(i)
+            trajectory.steps=new_steps
             # add exploration instruction
-            # FIXME 极其容易超 model input length
             records=self._state_recorder.get_state(trajectory)
             if len(records)>0:
                 instruction="In the past interactions at this place, you have output these action and observed these states already:\n"
                 for id, record in enumerate(records):
                     instruction+=f"## {id+1}.\n"
-                    instruction+=f"action:\n{record[0]}\n\n"
-                    instruction+=f"state:\n{record[1]}\n\n"
+                    instruction+=f"[action]\n{record[0][:self._max_record_len]}\n\n"
+                    instruction+=f"[state]\n{record[1][:self._max_record_len]}\n\n"
                 instruction+="## Continue your work."
                 instruction+="Please continue your work. You are not expected to repeat the action you have already observed." # TODO: better strategy
                 trajectory.steps.append({"role":"system","content":instruction})
