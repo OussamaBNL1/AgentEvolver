@@ -126,7 +126,7 @@ class AgentFlow(BaseAgentFlow):
         if self._reward_calculator is not None:
             score = self._reward_calculator.calculate_reward(trajectory, env)
         else:
-            score = env.evaluate(instance_id, params={"sparse": False})
+            score = env.evaluate(instance_id, params={"sparse": True})
         trajectory.reward.outcome = score
         trajectory.reward.description = "Outcome 1 = success, 0 = failure."
 
