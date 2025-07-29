@@ -9,6 +9,7 @@ from beyondagent.client.env_client import EnvClient
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.module.agent_flow.reward_calculator import RewardCalculator
 from beyondagent.module.task_manager.strategies.deduplication.embedding import StateRecorder
+from beyondagent.module.task_manager.strategies.deduplication.prompts import prompt_state_summary
 from beyondagent.schema.trajectory import Trajectory
 from beyondagent.utils.utils import convert_tool_to_user_message, clip_state_content_correctly
 
@@ -47,13 +48,21 @@ class ControlledAgentFlow(BaseAgentFlow):
             records=self._state_recorder.get_state(trajectory)
             if len(records)>0:
                 instruction="In the past interactions at this place, you have output these action and observed these states already:\n"
+                
+                records_str=""
                 for id, record in enumerate(records):
-                    instruction+=f"## {id+1}.\n"
-                    instruction+=f"[action]\n{record[0][:self._max_record_len]}\n\n"
-                    instruction+=f"[state]\n{record[1][:self._max_record_len]}\n\n"
+                    records_str+=f"## {id+1}.\n"
+                    records_str+=f"[action]\n{record[0][:self._max_record_len]}\n\n"
+                    records_str+=f"[state]\n{record[1][:self._max_record_len]}\n\n"
+                instruction+=self._compress_state_action(records_str)
+                instruction+="\n\n"
+
                 instruction+="## Continue your work."
                 instruction+="Please continue your work. You are not expected to repeat the action you have already observed." # TODO: better strategy
                 logger.debug(f"retrieve #records={len(records)}, #instruction={len(instruction)}")
+                
+                from pprint import pprint
+                pprint(instruction)
                 
                 trajectory.steps.append({"role":"user","content":instruction})
             
@@ -150,6 +159,17 @@ class ControlledAgentFlow(BaseAgentFlow):
             trajectory.steps = trajectory.steps[:-1]
 
         return trajectory
+    
+    
+    def _compress_state_action(self, records: str)-> str:
+        msg=[
+            {
+                'role': 'user',
+                'content': prompt_state_summary.get_prompt_compress_states(records)
+            }
+        ]
+        llm_output = self.llm_chat_fn(msg)
+        return prompt_state_summary.parse_compressed_results(llm_output['content'])
 
 
 def sanitize_env_state(state: dict):

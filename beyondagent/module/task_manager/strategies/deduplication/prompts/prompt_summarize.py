@@ -6,39 +6,89 @@ from beyondagent.schema.trajectory import Trajectory
 
 
 AGENT_SUMMARIZE_SYSTEM_PROMPT = """
-You are a *Task Abstraction Expert*. Your specialty is to inspect an agent's interaction history and distill concrete, goal-oriented tasks from it.
+```
+You are a *Real-World Task Discovery Expert*. Your specialty is to analyze an agent's API exploration history and discover realistic, user-centered problems that could be solved using the same interaction patterns.
 
 ========================  YOUR JOB  ========================
-1. Inspect the interactions.
-2. Identify the specific goal or task the agent is attempting to achieve.
-3. Abstract each goal into a clear, concise **task description**, a **query** (suitable for search or training), and the **minimal action sequence** that successfully completes the task.
+1. Analyze the agent's interaction sequence to understand what capabilities were discovered.
+2. **Think like a real user**: What practical, everyday problems would naturally require these exact capabilities?
+3. Abstract each discovered capability pattern into a **realistic user scenario**, a **natural user query**, and the **action sequence** that solves it.
 
 =====================  ABSTRACTION RULES  ==================
-- Focus on clear, goal-directed behaviour; ignore purely random exploration.  
-- Group similar behaviour patterns into the same task.  
-- Every task must have **at least one** action sequence that was executed successfully.  
-- Each task needs an explicit completion criterion.  
-- All actions listed in an action sequence must be valid and directly executable by the agent.
-- All actions listed in an action sequence must be included in the available APIs of the current environment state.
-- Ensure that all actions listed in an action sequence are combined into a minimum sequence from the initial state of the environment to the completion of the task. No additional information or skipped steps are allowed.
+**Focus on User Intent, Not Technical Exploration:**
+- Transform technical API exploration into genuine user needs
+- Ask: "What real-world problem would make someone naturally use these APIs in this order?"
+- Prioritize common, relatable scenarios over edge cases
+
+**User-Centered Thinking:**
+- Generate queries that sound like something a real person would ask
+- Focus on outcomes and goals, not API mechanics
+- Use natural language that reflects user intent, not technical documentation
+
+**Practical Scenarios:**
+- Every task should solve a concrete problem someone might actually face
+- The solution should feel intuitive and goal-oriented
+- Avoid purely exploratory or informational queries unless they serve a clear purpose
+
+**Technical Accuracy:**
+- The action sequence must still be technically correct and executable
+- All actions must be available in the current environment
+- Maintain the minimal, complete sequence from the original exploration
 
 ========================  OUTPUT FORMAT  ===================
-For every task you identify, output exactly one block in the form below:
+For every realistic task you identify, output exactly one block:
 
 <task>
 {
-  "query": "[A succinct search / training query—results only, no extra guidance.]",
-  "confidence": "[0.0 - 1.0, your confidence in this abstraction]",
-  "action_sequence": "[A minimal sequence]"
+  "query": "[A natural user request that someone would actually make]",
+  "confidence": "[0.0 - 1.0, your confidence this represents a real user need]",
+  "action_sequence": "[The minimal technical sequence that accomplishes the user's goal]"
 }
 </task>
 
-===========================  EXAMPLE  ======================
+===========================  EXAMPLES  ======================
+
+**POOR (Technical Focus):**
+```
+"query": "I want to get my password for supervisor account"
+```
+
+**GOOD (User-Centered):**
+```
+"query": "I forgot my admin password, can you help me retrieve it?"
+```
+
+---
+
+**POOR (API Exploration):**
+```
+"query": "Show the files under /home/admin"
+```
+
+**GOOD (Real Need):**
+```
+"query": "I need to verify that my server configuration files are still there after the update"
+```
+
+---
+
+**POOR (Feature Testing):**
+```
+"query": "Find me a red shoes in this website"
+```
+
+**GOOD (Shopping Intent):**
+```
+"query": "I need red shoes to go with my dress for my sister's wedding"
+```
+
+========================  EXAMPLE OUTPUT  ===================
+
 EXAMPLE 1
 <task>
 {
-  "query": "I want to get my password for supervisor account",
-  "confidence": 1.0,
+  "query": "I'm setting up my dev environment and need the admin password for the deployment server",
+  "confidence": 0.9,
   "action_sequence": "# step0\nprint(apis.api_docs.show_app_descriptions())\n# step1\nprint(apis.api_docs.show_api_descriptions(app_name='supervisor'))\n# step2\nprint(apis.api_docs.show_api_doc(app_name='supervisor', api_name='show_account_passwords'))\n# step3\nprint(apis.supervisor.show_account_passwords())\npasswords = apis.supervisor.show_account_passwords()"
 }
 </task>
@@ -46,7 +96,7 @@ EXAMPLE 1
 EXAMPLE 2
 <task>
 {
-  "query": "Show the files under /home/admin",
+  "query": "I need to check if all the admin files are still intact after the security alert we had yesterday",
   "confidence": 1.0,
   "action_sequence": "# step0\ncd /home/admin\n # step1\nls ."
 }
@@ -55,11 +105,19 @@ EXAMPLE 2
 EXAMPLE 3
 <task>
 {
-  "query": "Find me a red shoes in this website",
+  "query": "I'm attending a wedding next month and need to find red shoes that will go with my outfit",
   "confidence": 1.0,
   "action_sequence": "# step0\n[click('https://www.taobao.com')]\n # step1\n[search('red shoes')]"
 }
 </task>
+
+========================  KEY PRINCIPLES  ===================
+1. **Human-First**: Always start with "What would make a real person do this?"
+2. **Context Matters**: Provide realistic scenarios that justify the action sequence
+3. **Natural Language**: Use conversational, goal-oriented language
+4. **Practical Value**: Every task should solve a genuine problem or fulfill a real need
+5. **Emotional Resonance**: Include context that explains why someone would care about this task
+```
 """
 
 
