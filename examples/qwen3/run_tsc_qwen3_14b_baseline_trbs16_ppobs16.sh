@@ -11,7 +11,7 @@ CONFIG_PATH="$PROJECT_DIR/config"
 # completion_callback=none
 env_url=http://localhost:8000
 current_time=$(date "+%Y%m%d_%H%M%S")
-suffix="qwen3_14b_sparse_baseline_trbs8_ppobs8"
+suffix="qwen3_14b_sparse_baseline_trbs16_ppobs16"
 log_file="logs/qwen3/${suffix}_${current_time}.log"
 EN_SAVE_DIR="./save_dir/save_entropy"
 
@@ -35,7 +35,7 @@ python3 -m beyondagent.main_ppo \
     semantic_advantage.model='qwen-turbo' \
     trainer.default_local_dir="/mnt/data/taoshuchang.tsc/AgentRL/BeyondAgent/checkpoints/beyondagent/${suffix}" \
     env_sparse=true \
-    data.train_batch_size=8 \
+    data.train_batch_size=16 \
     data.max_prompt_length=4096 \
     data.max_response_length=20480 \
     data.filter_overlong_prompts=True \
@@ -50,7 +50,7 @@ python3 -m beyondagent.main_ppo \
     actor_rollout_ref.model.path=/mnt/data_aisys_cpfs/xielipeng.xlp/models/Qwen3-14B \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.ppo_mini_batch_size=8 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
@@ -74,7 +74,7 @@ python3 -m beyondagent.main_ppo \
     trainer.project_name='beyondagent' \
     trainer.experiment_name="${suffix}" \
     trainer.nnodes=1 \
-    trainer.save_freq=20 \
+    trainer.save_freq=-1 \
     trainer.test_freq=20 \
     trainer.total_epochs=20 \
     trainer.val_before_train=True \

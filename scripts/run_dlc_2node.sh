@@ -14,7 +14,7 @@ export current_time=$(date "+%Y%m%d_%H%M%S")
 # export ENV_PATH="/mnt/data/taoshuchang.tsc/beyondagent/EnvService"
 export ENV_PATH="/mnt/data/taoshuchang.tsc/beyondagent/EnvService_copy"
 export PROJECT_PATH="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent"
-export TRAIN_SCRIPT="examples/qwen3/run_tsc_qwen3_14b_baseline_online.sh"
+export TRAIN_SCRIPT="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/examples/qwen3/run_tsc_qwen3_14b_baseline_trbs16_ppobs16.sh"
 
 export FILE_PATH="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/logs/assignment/$MASTER_ADDR-master-ip.log"
 export EXPECTED_WORKERS=$WORLD_SIZE
