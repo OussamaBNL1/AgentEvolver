@@ -12,7 +12,7 @@ CONFIG_PATH="$PROJECT_DIR/config"
 # completion_callback=none
 env_url=http://$MASTER_ADDR:8000
 current_time=$(date "+%Y%m%d_%H%M%S")
-suffix="qwen3_14b_sparse_adv_groupnorm_std_trbs16_ppobs16_warmup5"
+suffix="qwen3_14b_sparse_adv_groupnorm_std_trbs32_ppobs16"
 log_file="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/logs/qwen3/${suffix}_${current_time}.log"
 
 # Ray - 修改为直接连接Ray集群，而不是通过Job API
