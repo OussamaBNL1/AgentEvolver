@@ -12,6 +12,8 @@ data:
   train_batch_size: 256
   val_batch_size: 256
   return_raw_chat: True
+  train_files: /mnt/data_aisys_cpfs/zouanni.zan/data/appworld_parquet/train.parquet
+  val_files: /mnt/data_aisys_cpfs/zouanni.zan/data/appworld_parquet/dev.parquet
 
 actor_rollout_ref:
   hybrid_engine: True

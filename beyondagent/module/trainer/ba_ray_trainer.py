@@ -832,74 +832,77 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             
                             # TODO：advantage norm
                             # === Advantage normalization (under semantic_advantage.adv_norm) ===
+                            # === Advantage normalization (semantic_advantage.adv_norm) ==========
                             norm_root = getattr(self.config, "semantic_advantage", None)
                             adv_norm_cfg = getattr(norm_root, "adv_norm", None) if norm_root else None
 
                             if adv_norm_cfg and getattr(adv_norm_cfg, "enable", True):
-                                level = getattr(adv_norm_cfg, "level", "batch")        # "batch" or "group"
-                                group_size = getattr(adv_norm_cfg, "group_size", None) # only used when level=="group"
-                                use_mask_type = getattr(norm_root, "mask_type", "loss_mask")  # 复用你已有的 mask_type 设定
+                                level = getattr(adv_norm_cfg, "level", "batch")          # "batch" | "group"
+                                group_size = getattr(adv_norm_cfg, "group_size", None)   # group 模式专用
+                                use_mask_type = getattr(norm_root, "mask_type", "loss_mask")
 
                                 with torch.no_grad():
-                                    adv = batch.batch["advantages"]                    # (bs, L)
+                                    adv = batch.batch["advantages"]                      # (bs, L)
                                     bs, resp_len = adv.shape
 
-                                    # 选 mask
+                                    # ------- 选 mask -------
                                     if use_mask_type == "loss_mask" and "loss_mask" in batch.batch:
                                         mask_all = batch.batch["loss_mask"][:, -resp_len:].bool()
                                     else:
                                         mask_all = batch.batch["response_mask"].bool()
 
+                                    nonzero_mask_all = mask_all & (adv != 0)             # 仅对 adv≠0 的 token 归一化
                                     norm_adv = adv.clone()
 
-                                    # ---------- BATCH ----------
+                                    # ------- BATCH 模式 -------
                                     if level == "batch":
-                                        valid_adv = adv[mask_all]
-                                        if valid_adv.numel() > 0:
-                                            med = torch.median(valid_adv)
-                                            norm_adv[mask_all] = adv[mask_all] - med
+                                        nz_adv = adv[nonzero_mask_all]
+                                        if nz_adv.numel() > 0:
+                                            med = torch.median(nz_adv)
+                                            std = nz_adv.std(unbiased=False).clamp_min(1e-8)
+                                            norm_adv[nonzero_mask_all] = (adv[nonzero_mask_all] - med) / std
                                         else:
-                                            med = torch.tensor(0.0, device=adv.device)
+                                            med, std = torch.tensor(0.0, device=adv.device), torch.tensor(1.0, device=adv.device)
 
-                                        tokens_normed = int(mask_all.sum().item())
                                         group_cnt = 1
-                                        zero_groups = 0
-                                        med_mean = float(med)
+                                        tokens_normed = int(nonzero_mask_all.sum().item())
+                                        med_mean, std_mean = float(med), float(std)
+                                        zero_groups = 0  # batch 模式无意义
 
-                                    # ---------- GROUP ----------
+                                    # ------- GROUP 模式 -------
                                     elif level == "group":
-                                        # 默认用 repeat 组划分（GRPO 典型 n）
                                         if group_size is None:
                                             group_size = self.config.actor_rollout_ref.rollout.n
                                         device = adv.device
                                         group_ids = torch.arange(bs, device=device) // group_size
 
                                         tokens_normed = 0
-                                        med_list = []
+                                        med_list, std_list = []
                                         zero_groups = 0
-                                        group_cnt = int(group_ids.unique().numel())
 
                                         for gid in group_ids.unique():
-                                            g_mask_sample = (group_ids == gid).unsqueeze(1)   # (bs,1)
-                                            g_mask = g_mask_sample & mask_all                 # (bs,L)
+                                            g_sample_mask = (group_ids == gid).unsqueeze(1)
+                                            g_mask = g_sample_mask & nonzero_mask_all
                                             if not g_mask.any():
                                                 continue
 
                                             g_adv = adv[g_mask]
-                                            if g_adv.numel() == 0:
+                                            med = torch.median(g_adv)
+                                            std = g_adv.std(unbiased=False)
+                                            if std <= 1e-8:
+                                                zero_groups += 1
                                                 continue
-
-                                            g_med = torch.median(g_adv)
-                                            # 仅平移
-                                            norm_adv[g_mask] = adv[g_mask] - g_med
-
-                                            med_list.append(g_med)
+                                           
+                                            norm_adv[g_mask] = (adv[g_mask] - med) / std
+                                            #  # TODO: 尝试不减 median
+                                            # norm_adv[g_mask] = (adv[g_mask]) / std
+                                            med_list.append(med)
+                                            std_list.append(std)
                                             tokens_normed += int(g_adv.numel())
 
-                                        if med_list:
-                                            med_mean = torch.stack(med_list).mean().item()
-                                        else:
-                                            med_mean = 0.0
+                                        group_cnt = int(group_ids.unique().numel())
+                                        med_mean = torch.stack(med_list).mean().item() if med_list else 0.0
+                                        std_mean = torch.stack(std_list).mean().item() if std_list else 1.0
 
                                     else:
                                         raise ValueError(f"Unknown adv_norm.level: {level}")
@@ -908,33 +911,33 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                     batch.batch["advantages"] = norm_adv
 
                                     # -------- Stats after normalization --------
-                                    # token 级
                                     pos_tok = int((norm_adv[mask_all] > 0).sum().item())
                                     neg_tok = int((norm_adv[mask_all] < 0).sum().item())
                                     zero_tok = int((norm_adv[mask_all] == 0).sum().item())
 
-                                    # sequence 级（对有效 token 求和）
                                     seq_sum = (norm_adv * mask_all).sum(dim=1)
                                     pos_seq = int((seq_sum > 0).sum().item())
                                     neg_seq = int((seq_sum < 0).sum().item())
                                     zero_seq = int((seq_sum == 0).sum().item())
 
-                                # 记录指标
+                                # --------- Metrics ---------
                                 metrics.update({
-                                    "adv_norm/level": level,   # 直接存字符串更直观
-                                    "adv_norm/groups": group_cnt,
-                                    "adv_norm/tokens_normed": tokens_normed,
-                                    "adv_norm/zero_groups": zero_groups,    # 目前仅占位（未用到std故恒0）
-                                    "adv_norm/median_mean": float(med_mean),
+                                    "semantic_advantage/adv_norm/level": level,
+                                    "semantic_advantage/adv_norm/groups": group_cnt,
+                                    "semantic_advantage/adv_norm/tokens_normed": tokens_normed,
+                                    "semantic_advantage/adv_norm/zero_groups": zero_groups,
+                                    "semantic_advantage/adv_norm/median_mean": float(med_mean),
+                                    "semantic_advantage/adv_norm/std_mean":   float(std_mean),
 
-                                    "adv_norm/pos_tokens": pos_tok,
-                                    "adv_norm/neg_tokens": neg_tok,
-                                    "adv_norm/zero_tokens": zero_tok,
-                                    "adv_norm/pos_sequences": pos_seq,
-                                    "adv_norm/neg_sequences": neg_seq,
-                                    "adv_norm/zero_sequences": zero_seq,
-                                    "adv_norm/neg_token_ratio": neg_tok / max(1, pos_tok + neg_tok),
+                                    "semantic_advantage/adv_norm/pos_tokens": pos_tok,
+                                    "semantic_advantage/adv_norm/neg_tokens": neg_tok,
+                                    "semantic_advantage/adv_norm/zero_tokens": zero_tok,
+                                    "semantic_advantage/adv_norm/pos_sequences": pos_seq,
+                                    "semantic_advantage/adv_norm/neg_sequences": neg_seq,
+                                    "semantic_advantage/adv_norm/zero_sequences": zero_seq,
+                                    "semantic_advantage/adv_norm/neg_token_ratio": neg_tok / max(1, pos_tok + neg_tok),
                                 })
+
                             
                             print("^^^^^^^^^^^^^^^^^ end parallel semantic processing")
                             
