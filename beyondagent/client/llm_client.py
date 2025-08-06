@@ -83,6 +83,8 @@ class DashScopeClient:
                     raise LlmException("inappropriate content")
                 if "limit" in error_json['message']:
                     raise LlmException("hit limit")
+            except LlmException as e:
+                raise
             except:
                 logger.error(f"API request failed: {response.text}")
                 response.raise_for_status()
@@ -105,6 +107,8 @@ class DashScopeClient:
                     raise LlmException("inappropriate content")
                 if "limit" in error_json['message']:
                     raise LlmException("hit limit")
+            except LlmException as e:
+                raise
             except:
                 logger.error(f"API request failed: {response.text}")
                 response.raise_for_status()
