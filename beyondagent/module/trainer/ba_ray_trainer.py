@@ -50,7 +50,7 @@ from beyondagent.module.env_manager.env_manager import ParallelEnvManager
 from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory
 from beyondagent.utils.plot_entropy import log_token_entropy
-# from beyondagent.module.advantage_assignment.token_level_assignment import _add_entropy_mask as _add_advantage_mask
+from beyondagent.module.advantage_assignment.token_level_assignment import _add_entropy_mask as _add_advantage_mask
 from beyondagent.module.advantage_assignment.semantic_level_assignment import (
     evaluate_step_flags, apply_step_mask
 )
@@ -58,6 +58,7 @@ from beyondagent.utils.advantage_structure_checker import (
     debug_advantage_structure, 
     validate_grpo_advantage_structure
 )
+# from beyondagent.module.credit_assign import AssignmentConfig, CreditAssigner
 
 def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | torch.Tensor:
     """
@@ -466,7 +467,15 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
         return metric_dict
 
-    
+    def _init_credit_assigner(self):
+        raw = self._get_semantic_config()               # 原先解析 config 的方法
+        cfg = AssignmentConfig(backend=raw.evaluation_type,
+                              model=raw.model,
+                              concurrent=raw.concurrent,
+                              log_dir=pathlib.Path(self.config.trainer.llm_evaluation_log_dir))
+        self.credit_assigner = CreditAssigner(cfg)
+
+
     def fit(self):
         """
         The training loop of PPO.
@@ -723,38 +732,19 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                         # )                  # breakpoint()
                         # print("$$$$$$$$$$$$$$$$$$$$ ")
                         
-                        if self.global_steps <= 3:
-                            print(f"\n🔍 [DEBUG STEP {self.global_steps}] Advantage Structure Check")
-                            print("-" * 60)
-                            
-                            # 自动选择非零样本进行调试
-                            debug_advantage_structure(batch, self.tokenizer)
-                            
-                            # 使用loss_mask进行验证
-                            advs = batch.batch["advantages"]
-                            response_length = advs.shape[1]
-                            loss_mask_response = batch.batch["loss_mask"][:, -response_length:]
-                            
-                            is_valid, message = validate_grpo_advantage_structure(
-                                advs, 
-                                loss_mask=loss_mask_response  # 使用loss_mask参数
-                            )
-                            print(f"🔍 [GRPO Validation] {message}")
-                            
-                            # 使用loss_mask统计零advantage样本
-                            from beyondagent.module.advantage_assignment.parallel_semantic_assignment import _get_overall_advantage
-                            zero_count = 0
-                            for sample_idx in range(len(batch)):
-                                adv_val = _get_overall_advantage(
-                                    advs[sample_idx], 
-                                    loss_mask_response[sample_idx]
-                                )
-                                if abs(adv_val) < 1e-8:
-                                    zero_count += 1
-                            
-                            print(f"🔍 [Zero Advantage] {zero_count}/{len(batch)} samples have advantage≈0 (using loss_mask)")
-                            print("-" * 60)
-                            
+                        # # ===========  0804 shuchang: add semantic mask  =========== 
+                        # prompts    = self.tokenizer.batch_decode(batch.batch["prompts"],    skip_special_tokens=True)
+                        # references = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                        # mask       = batch.batch["response_mask"].float()
+
+                        # adv, stats = self.credit_assigner.step_level(prompts, references, mask, self.global_steps)
+
+                        # # broadcast sample-level scores到 token 维度并乘回去
+                        # batch.batch["advantages"] = batch.batch["advantages"] * adv.unsqueeze(1)
+
+                        # # 你若想监控统计量可加：
+                        # metrics.update({f"sem_credit/{k}": v for k, v in stats.items()})
+                        
                         # 🔧 统一的语义评估配置访问
                         semantic_config = self._get_semantic_config()
                         enable_semantic_eval = semantic_config.enable
@@ -921,8 +911,13 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                             if std <= 1e-8:
                                                 zero_groups += 1
                                                 continue
-                                           
-                                            norm_adv[g_mask] = (adv[g_mask] - med) / std
+                                            norm_style = getattr(adv_norm_cfg, "norm_style", None)  
+                                            if norm_style == "nostd":
+                                                norm_adv[g_mask] = (adv[g_mask] - med)
+                                            elif  norm_style == "nomedian":
+                                                norm_adv[g_mask] = (adv[g_mask] ) / std
+                                            else:
+                                                norm_adv[g_mask] = (adv[g_mask] - med) / std
                                             #  # TODO: 尝试不减 median
                                             # norm_adv[g_mask] = (adv[g_mask]) / std
                                             med_list.append(med)

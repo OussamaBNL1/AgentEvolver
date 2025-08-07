@@ -127,3 +127,5 @@ log
 outputs
 python_log
 experiments
+scripts/*
+examples/*

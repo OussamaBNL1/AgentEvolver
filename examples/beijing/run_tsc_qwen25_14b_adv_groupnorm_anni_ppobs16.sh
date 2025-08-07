@@ -13,7 +13,7 @@ CONFIG_PATH="$PROJECT_DIR/config"
 env_url=http://$MASTER_ADDR:8000
 current_time=$(date "+%Y%m%d_%H%M%S")
 suffix="qwen25_14b_groupnorm_anni_ppobs16"
-log_file="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/logs/qwen25/${suffix}_${current_time}.log"
+log_file="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/logs/w_qwen25/${suffix}_${current_time}.log"
 
 # Ray - 修改为直接连接Ray集群，而不是通过Job API
 RAY_ADDRESS=${RAY_ADDRESS:-"ray://localhost:10001"}  # 改为Ray客户端地址
@@ -92,7 +92,7 @@ python -m beyondagent.main_ppo \
     trainer.project_name='beyondagent' \
     trainer.experiment_name="${suffix}" \
     trainer.nnodes=2 \
-    trainer.default_local_dir="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/checkpoints/qwen25/${suffix}" \
+    trainer.default_local_dir="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/checkpoints/w_qwen25/${suffix}" \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.total_epochs=30 \

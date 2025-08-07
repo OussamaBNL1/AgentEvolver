@@ -17,7 +17,7 @@ export ENV_PATH="/mnt/data/taoshuchang.tsc/beyondagent/EnvService_copy"
 export PROJECT_PATH="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent"
 suffix="qwen25_14b_adv_groupnorm_anni_nowarmup_uncon05"
 export TRAIN_SCRIPT="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/examples/beijing/run_tsc_${suffix}.sh"
-
+export DASHSCOPE_API_KEY="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # 在最开始就设置PYTHONPATH，确保所有节点都能找到beyondagent模块
 export PYTHONPATH="$PROJECT_PATH:$PYTHONPATH"
 echo "Initial PYTHONPATH set to: $PYTHONPATH"
@@ -174,7 +174,7 @@ if [[ $HOSTNAME == *"-master-"* ]]; then
     cd $ENV_PATH
     echo "Environment service Python path: $(which python)"
     # python -m env.env_service &
-    nohup python -m env.env_service &> "/mnt/data/taoshuchang.tsc/beyondagent/EnvService_copy/logs/qwen25/${suffix}.log" &
+    nohup python -m env.env_service &> "/mnt/data/taoshuchang.tsc/beyondagent/EnvService_copy/logs/w_qwen25/${suffix}.log" &
 
     # 等待环境服务启动
     sleep 15

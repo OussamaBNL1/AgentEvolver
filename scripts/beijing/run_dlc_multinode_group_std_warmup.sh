@@ -17,7 +17,7 @@ export ENV_PATH="/mnt/data/taoshuchang.tsc/beyondagent/EnvService_copy"
 export PROJECT_PATH="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent"
 suffix="qwen3_14b_adv_groupnorm_std_trbs16_ppobs16_warmup"
 export TRAIN_SCRIPT="/mnt/data/taoshuchang.tsc/beyondagent/BeyondAgent/examples/beijing/run_tsc_${suffix}.sh"
-
+export DASHSCOPE_API_KEY="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # 在最开始就设置PYTHONPATH，确保所有节点都能找到beyondagent模块
 export PYTHONPATH="$PROJECT_PATH:$PYTHONPATH"
 echo "Initial PYTHONPATH set to: $PYTHONPATH"
