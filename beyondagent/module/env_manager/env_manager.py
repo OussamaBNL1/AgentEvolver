@@ -41,7 +41,7 @@ class ParallelEnvManager(object):
         self.pad_token_id = self.tokenizer.pad_token_id
         self.rollout_config = config.actor_rollout_ref.rollout
 
-        self.experience_template = config.experience_maker.experience_template
+        self.experience_template = config.hybrid_experience_training.experience_template
 
     def get_llm_chat_fn(self, sampling_params: dict = None) -> callable:
         def llm_chat(messages: List[Dict[str, str]],
@@ -195,7 +195,6 @@ class ParallelEnvManager(object):
             
             #############
             # ANNI 0825
-            # import pdb;pdb.set_trace()
             train_sample_exp_mode = trajectory.metadata.get("task_train_exp_mode", "keep")  # "keep" or "discard"
             # print(train_sample_exp_mode)
 

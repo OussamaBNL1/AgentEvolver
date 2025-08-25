@@ -77,7 +77,7 @@ experience_maker:
   retrieve_top_k: 3
   updated_freq: 0   # 更新经验池的频率(这里表示k个steps)
   val_summarizer_save: False
-  experience_template: "\n\nSome Related Experience to help you to complete the task:<EXP>{}</EXP>"  # 插入经验的模版
+  
 
 hybrid_experience_training:
   enable: False
@@ -86,6 +86,7 @@ hybrid_experience_training:
   rollout_expratio: 0.5           # rollout时在group内部加经验的比例, train&val 保持一致
   train_sample_expmode: "keep"    # train集上rollout之后转换成训练样本保留/剔除/混合经验: ["keep", "discard", "hybrid"]
   train_sample_keepratio: 0.5     # task-level多少比例选择保留经验
+  experience_template: "\n\nSome Related Experience to help you to complete the task:<EXP>{}</EXP>"  # 插入经验的模版
 
 trainer:
   val_only: False

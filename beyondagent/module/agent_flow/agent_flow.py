@@ -26,7 +26,7 @@ class AgentFlow(BaseAgentFlow):
         self.response_template_ids = self.tokenizer.encode("<|im_start|>assistant\n")
         self.em_client = EMClient(base_url=self.config.experience_maker.base_url)
         self.sparse = self.config.actor_rollout_ref.rollout.sparse  # add sparse by ANNI 0723
-        self.experience_template = self.config.experience_maker.experience_template
+        self.experience_template = self.config.hybrid_experience_training.experience_template
 
 
     def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, add_exp: bool, task_train_exp_mode: str, **kwargs) -> Trajectory:   # add add_exp and task_train_exp_mode by ANNI
