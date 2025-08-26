@@ -1,156 +1,233 @@
 # -*- coding: utf-8 -*-
-# PRM step-reward → GRPO (group-normalize) → suffix-sum advantages
+# PRM (step-level) → group z-score (step-level) → per-trajectory reprojection → suffix-sum (step-level) → broadcast to token
 from __future__ import annotations
-from typing import List, Dict, Tuple
-import torch
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+import torch
 
 @dataclass
 class PRMHyper:
+    # 权重：一致性步的权重大，不一致性步的权重小
     consistent_scale: float = 1.0
-    pos_unconsistent_scale:  float = 0.2
-    neg_unconsistent_scale:  float = 0.2
-    eps:       float = 1e-8
+    pos_unconsistent_scale: float = 0.2   # 成功轨迹里的 BAD 步权重
+    neg_unconsistent_scale: float = 0.2   # 失败轨迹里的 GOOD 步权重
+    eps: float = 1e-8
+    do_batch_zscore: bool = True          # 是否做组内 z-score（按 step 级）
 
-def _step_end_indices_from_step_ids(step_ids_row: torch.Tensor) -> List[int]:
-    ids = step_ids_row.tolist()
-    end_ids = []
-    last_sid, last_idx = None, None
-    for t, sid in enumerate(ids):
-        if sid < 0:
-            continue
-        if last_sid is None:
-            last_sid, last_idx = sid, t
-        elif sid != last_sid:
-            end_ids.append(last_idx)
-            last_sid, last_idx = sid, t
-        else:
-            last_idx = t
-    if last_sid is not None:
-        end_ids.append(last_idx)
-    return end_ids
+# ----------------------------- Utils -----------------------------
 
-def compute_step_rewards_from_flags(
-    orm: torch.Tensor,              # (B,)
-    step_flags: List[List[bool]],   # GOOD/BAD flags
-    step_ids: torch.Tensor,         # (B, L_resp)
-    hyper: PRMHyper,
-) -> Tuple[List[List[float]], List[List[int]]]:
-    """
-    瓜分式构造 PRM：|O| 在 GOOD/BAD 步骤内均分。
-    """
-    B, _ = step_ids.shape
-    step_rewards: List[List[float]] = []
-    step_end_indices: List[List[int]] = []
+def _ensure_tensor(x, device, dtype=None):
+    if torch.is_tensor(x):
+        t = x.to(device=device)
+        if dtype is not None:
+            t = t.to(dtype)
+        return t
+    return torch.as_tensor(x, device=device, dtype=dtype)
 
-    for i in range(B):
-        ends = _step_end_indices_from_step_ids(step_ids[i])
-        K = len(ends)
-        flags = list(step_flags[i]) if i < len(step_flags) else []
-        if K != len(flags):
-            default_flag = True if orm[i].item() > 0 else False
-            if len(flags) < K:
-                flags = flags + [default_flag] * (K - len(flags))
-            else:
-                flags = flags[:K]
+def _num_steps_from_step_ids(step_ids_row: torch.Tensor) -> int:
+    """step_ids: shape (L,) with -1 for non-response tokens; contiguous step ids starting at 0."""
+    if step_ids_row.numel() == 0:
+        return 0
+    m = torch.amax(step_ids_row)
+    return int(m.item() + 1) if m.item() >= 0 else 0
 
-        O = orm[i].item()
-        O = 1.0 if O >= 0.5 else -1.0  # 0→-1, 1→1
-        good_idx = [j for j, f in enumerate(flags) if f]
-        bad_idx  = [j for j, f in enumerate(flags) if not f]
-        n_g, n_b = max(1, len(good_idx)), max(1, len(bad_idx))
+def _align_flags(flags: List[bool], K: int, is_success: bool) -> List[bool]:
+    if len(flags) == K:
+        return list(flags)
+    default_flag = True if is_success else False
+    if len(flags) < K:
+        return list(flags) + [default_flag] * (K - len(flags))
+    else:
+        return list(flags[:K])
 
-        if O >= 0:
-            r_g =  hyper.consistent_scale * abs(O) / n_g
-            r_b = -hyper.pos_unconsistent_scale  * abs(O) / n_b
-        else:
-            r_g =  hyper.neg_unconsistent_scale  * abs(O) / n_g
-            r_b = -hyper.consistent_scale * abs(O) / n_b
+# ------------------------- Core (Plan-3) -------------------------
 
-        r = [0.0] * K
-        for j in good_idx: r[j] = r_g
-        for j in bad_idx:  r[j] = r_b
-
-        step_rewards.append(r)
-        step_end_indices.append(ends)
-
-    return step_rewards, step_end_indices
-
-def group_standardize_step_rewards(
-    step_rewards: List[List[float]],
+def compute_step_rewards_from_flags_consistent_centered(
+    orms_sign: torch.Tensor,
+    step_flags: List[List[bool]],
+    step_ids: torch.Tensor,
     group_ids: torch.Tensor,
-    eps: float = 1e-8,
+    hyper: PRMHyper,
 ) -> List[List[float]]:
-    gid_unique = group_ids.unique().tolist()
-    gid_to_flat = {int(g): [] for g in gid_unique}
-    for i, rewards in enumerate(step_rewards):
-        gid_to_flat[int(group_ids[i].item())].extend(rewards)
+    """
+    方案3（按 step）：
+      1) 一致性权重瓜分：r_raw，逐轨迹 ∑=ORM_sign (±1)
+      2) 组内（group）step-level z-score：r_std
+      3) 逐轨迹去均值 + 加回 ORM_sign/K：r_proj（逐轨迹 ∑=ORM_sign）
+    返回：r_proj（逐轨迹按 step 的回报）
+    """
+    device = step_ids.device
+    B, L = step_ids.shape
+    assert orms_sign.shape[0] == B
+    assert group_ids.shape[0] == B
 
-    stats = {}
-    for g, vals in gid_to_flat.items():
-        if len(vals) == 0:
-            stats[g] = (0.0, 1.0)
-            continue
-        t = torch.tensor(vals, dtype=torch.float32)
-        mu = t.mean().item()
-        sd = max(t.std(unbiased=False).item(), eps)
-        stats[g] = (mu, sd)
-
-    out: List[List[float]] = []
-    for i, rewards in enumerate(step_rewards):
-        mu, sd = stats[int(group_ids[i].item())]
-        out.append([(v - mu) / sd for v in rewards])
-    return out
-
-def suffix_sum_advantages(
-    step_rewards_norm: List[List[float]],
-    step_end_indices: List[List[int]],
-    resp_len: int,
-    device: torch.device,
-    dtype: torch.dtype = torch.float32,
-) -> torch.Tensor:
-    B = len(step_rewards_norm)
-    adv = torch.zeros((B, resp_len), dtype=dtype, device=device)
+    # ---- 1) 一致性瓜分（逐轨迹 ∑=ORM_sign）----
+    step_rewards_raw: List[List[float]] = []
+    Ks: List[int] = []
     for i in range(B):
-        for r, end_t in zip(step_rewards_norm[i], step_end_indices[i]):
-            if 0 <= end_t < resp_len:
-                adv[i, end_t] += float(r)
-        if resp_len > 1:
-            adv[i].flip(dims=[0]).cumsum_(dim=0).flip_(dims=[0])
+        K = _num_steps_from_step_ids(step_ids[i])
+        Ks.append(K)
+        if K == 0:
+            step_rewards_raw.append([])
+            continue
+
+        is_success = bool(orms_sign[i].item() > 0)
+        flags_i = _align_flags(step_flags[i] if i < len(step_flags) else [], K, is_success=is_success)
+
+        if is_success:
+            w_good = hyper.consistent_scale
+            w_bad  = hyper.pos_unconsistent_scale
+        else:
+            w_good = hyper.neg_unconsistent_scale
+            w_bad  = hyper.consistent_scale
+
+        weights = torch.tensor([w_good if f else w_bad for f in flags_i], device=device, dtype=torch.float32)
+        total_w = float(weights.sum().item())
+        if total_w <= hyper.eps:
+            # 退化保护：均分
+            weights[:] = 1.0
+            total_w = float(K)
+        unit = float(orms_sign[i].item()) / total_w
+        r_raw = (weights * unit).tolist()  # ∑=±1
+        step_rewards_raw.append(r_raw)
+
+    if not hyper.do_batch_zscore:
+        return step_rewards_raw
+
+    # ---- 2) 组内 step-level z-score ----
+    # 先把每个 group 里所有 step 的 r_raw 拉平，求 mu, std，并对该组所有样本的 step 做 (x-mu)/std
+    step_rewards_std: List[List[float]] = [[] for _ in range(B)]
+    # 建立 group -> indices
+    unique_groups = torch.unique(group_ids)
+    for g in unique_groups.tolist():
+        idxs = (group_ids == g).nonzero(as_tuple=False).view(-1).tolist()
+        # flatten this group's steps
+        flat_vals = []
+        for i in idxs:
+            flat_vals.extend(step_rewards_raw[i])
+        if len(flat_vals) == 0:
+            # 该组无step（极端情况）
+            for i in idxs:
+                step_rewards_std[i] = list(step_rewards_raw[i])
+            continue
+        t = torch.tensor(flat_vals, device=device, dtype=torch.float32)
+        mu = float(t.mean().item())
+        std = float(t.std(unbiased=False).item())
+        if std <= hyper.eps:
+            # 仅减均值
+            for i in idxs:
+                step_rewards_std[i] = [float(x - mu) for x in step_rewards_raw[i]]
+        else:
+            inv = 1.0 / (std + 1e-12)
+            for i in idxs:
+                step_rewards_std[i] = [float((x - mu) * inv) for x in step_rewards_raw[i]]
+
+    # ---- 3) 逐轨迹再投影（∑=ORM_sign）----
+    step_rewards_proj: List[List[float]] = []
+    for i in range(B):
+        K = Ks[i]
+        if K == 0:
+            step_rewards_proj.append([])
+            continue
+        ri = step_rewards_std[i]
+        m = sum(ri) / K
+        # 去均值 + 均分 ORM_sign/K
+        base = float(orms_sign[i].item()) / K
+        r_proj = [float(x - m + base) for x in ri]
+        step_rewards_proj.append(r_proj)
+
+    return step_rewards_proj
+
+def suffix_sum_on_steps(step_rewards: List[List[float]]) -> List[List[float]]:
+    """对每个样本的 step 回报做后缀和，输出同形状的 step-adv。"""
+    adv: List[List[float]] = []
+    for r in step_rewards:
+        if not r:
+            adv.append([])
+            continue
+        t = torch.tensor(r, dtype=torch.float32)
+        s = torch.flip(torch.cumsum(torch.flip(t, dims=[0]), dim=0), dims=[0])
+        adv.append([float(x) for x in s])
     return adv
 
+def broadcast_step_adv_to_tokens(
+    step_adv: List[List[float]],
+    step_ids: torch.Tensor,
+) -> torch.Tensor:
+    """把 step-adv 按 step_ids 广播到 token 上。step_ids 为 -1 的位置填 0。"""
+    device = step_ids.device
+    B, L = step_ids.shape
+    out = torch.zeros((B, L), device=device, dtype=torch.float32)
+    for i in range(B):
+        if not step_adv[i]:
+            continue
+        adv_i = torch.tensor(step_adv[i], device=device, dtype=torch.float32)
+        # mask for response tokens
+        sid_row = step_ids[i]
+        valid = sid_row >= 0
+        if torch.any(valid):
+            sids = sid_row[valid]
+            out[i, valid] = adv_i[sids]
+    return out
+
+# ----------------------------- Entry -----------------------------
+
 def compute_prm_grpo_advantages(
-    batch,
-    step_flags: List[List[bool]],
-    group_size: int,
-    hyper: PRMHyper = PRMHyper(),
+    batch,                          # DataProto 或兼容结构：batch.batch[...] 可索引
+    step_flags: List[List[bool]],   # 每条轨迹的 GOOD/BAD 标志，长度与 step 数匹配（不足则按 ORM 符号补齐）
+    hyper: Optional[PRMHyper] = None,
 ) -> Dict[str, torch.Tensor]:
+    """
+    方案3 + ORM 强制为 ±1 的版本：
+      - ORM_sign = sign(sum(token_level_rewards))
+      - 在 step 上瓜分、标准化、再投影，得到 step-adv
+      - 将 step-adv 按 step_ids 广播到 token 得到 (B, L) 的 advantages
+    返回：
+      - advantages: (B, L) token-level advantages
+      - orm_scalar: (B,) 逐条轨迹的 ±1
+    """
+    if hyper is None:
+        hyper = PRMHyper()
+
+    # ---- 取必要字段 ----
+    device = None
+    # responses 仅用于确定设备/长度
     responses = batch.batch["responses"]
-    resp_len  = responses.size(1)
-    device    = responses.device
+    if torch.is_tensor(responses):
+        device = responses.device
+    else:
+        responses = torch.as_tensor(responses)
+        device = responses.device
 
-    step_ids = batch.batch["step_ids"][:, -resp_len:]
-    token_level_rewards = batch.batch["token_level_rewards"]
+    step_ids = _ensure_tensor(batch.batch["step_ids"], device=device, dtype=torch.long)  # (B, L_resp) with -1 for non-response
+    group_ids = _ensure_tensor(batch.batch["group_ids"], device=device, dtype=torch.long).view(-1)
 
-    # 直接用 token_level_rewards 作为 ORM（和 Ray GRPO 一致）
-    orm = token_level_rewards.sum(dim=1)  # (B,)
+    # 取 token-level reward（可能字段名不同，做兜底）
+    token_keys_try = ["token_level_rewards", "response_token_level_rewards", "token_rewards"]
+    token_level_rewards = None
+    for k in token_keys_try:
+        if k in batch.batch:
+            token_level_rewards = _ensure_tensor(batch.batch[k], device=device, dtype=torch.float32)
+            break
+    if token_level_rewards is None:
+        raise KeyError("token-level rewards not found in batch (tried keys: token_level_rewards / response_token_level_rewards / token_rewards)")
 
-    raw_step_rewards, step_end_indices = compute_step_rewards_from_flags(
-        orm=orm, step_flags=step_flags, step_ids=step_ids, hyper=hyper
+    # ---- ORM_sign = ±1 ----
+    orm_sum = token_level_rewards.sum(dim=1)   # (B,)
+    orms_sign = torch.where(orm_sum > 0, torch.ones_like(orm_sum), -torch.ones_like(orm_sum)).to(dtype=torch.float32)
+
+    # ---- Step-level pipeline ----
+    step_rewards_proj = compute_step_rewards_from_flags_consistent_centered(
+        orms_sign=orms_sign,
+        step_flags=step_flags,
+        step_ids=step_ids,
+        group_ids=group_ids,
+        hyper=hyper,
     )
-
-    # 直接使用 env_manager 注入的 group_ids，避免串组
-    group_ids = batch.batch["group_ids"]
-    if not torch.is_tensor(group_ids):
-        group_ids = torch.as_tensor(group_ids)
-    group_ids = group_ids.to(device=device, dtype=torch.long).view(-1)
-    assert group_ids.numel() == responses.size(0), "group_ids length must equal batch size"
-
-    norm_step_rewards = group_standardize_step_rewards(raw_step_rewards, group_ids, eps=hyper.eps)
-
-    A = suffix_sum_advantages(norm_step_rewards, step_end_indices, resp_len, device=device)
+    step_adv = suffix_sum_on_steps(step_rewards_proj)
+    advantages = broadcast_step_adv_to_tokens(step_adv, step_ids)
 
     return {
-        "advantages": A,
-        "orm_scalar": orm,
+        "advantages": advantages,        # (B, L_resp)
+        "orm_scalar": orms_sign,         # (B,)
     }

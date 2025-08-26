@@ -845,3 +845,15 @@ class ParallelSemanticProcessor:
             self.process_batch(tokenizer, batch, mask_tensor=mask_tensor, 
                              save_dir=save_dir, global_step=global_step, epoch=epoch, **kwargs)
         )
+    
+    def evaluate_step_flags_parallel_sync(tokenizer, batch, **kwargs):
+        """evaluate_step_flags_parallel的同步包装器"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(
+            evaluate_step_flags_parallel(tokenizer, batch, **kwargs)
+        )

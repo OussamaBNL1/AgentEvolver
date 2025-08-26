@@ -731,8 +731,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                 verify_step_content(batch, self.tokenizer, sample_idx)
 
                             # === (B) 一次 API / 每样本评估全部 steps ===
-                            from beyondagent.module.advantage_assignment.parallel_semantic_assignment import evaluate_step_flags_parallel
-                            flags, stats = evaluate_step_flags_parallel(
+                            from beyondagent.module.advantage_assignment.parallel_semantic_assignment import evaluate_step_flags_parallel_sync
+                            flags, stats = evaluate_step_flags_parallel_sync(
                                 tokenizer=self.tokenizer,
                                 batch=batch,
                                 overall_score_source="token_level_rewards",  # PRM-GRPO 使用 ORM
