@@ -55,6 +55,7 @@ def compute_step_rewards_from_flags(
                 flags = flags[:K]
 
         O = orm[i].item()
+        O = 1.0 if O >= 0.5 else -1.0  # 0→-1, 1→1
         good_idx = [j for j, f in enumerate(flags) if f]
         bad_idx  = [j for j, f in enumerate(flags) if not f]
         n_g, n_b = max(1, len(good_idx)), max(1, len(bad_idx))
