@@ -81,6 +81,7 @@ class UnifiedMixtureStrategy(MixtureStrategy):
         if self._use_original:
             mixed_objectives.extend(copy.deepcopy(original_tasks))
             logger.info(f"added {len(mixed_objectives)} original tasks")
+        cnt_original_count = len(mixed_objectives)
         
         if self._synthetic_ratio > 0:
             target_synthetic_count = int(len(original_tasks) * self._synthetic_ratio)
@@ -99,8 +100,8 @@ class UnifiedMixtureStrategy(MixtureStrategy):
             logger.debug("shuffling data")
             rng.shuffle(mixed_objectives)
 
-        synthetic_count = len(mixed_objectives) - len(original_tasks)
-        logger.info(f"final mixture: {len(original_tasks)} original + {synthetic_count} synthetic = {len(mixed_objectives)} total")
+        synthetic_count = len(mixed_objectives) - cnt_original_count
+        logger.info(f"final mixture: {cnt_original_count} original + {synthetic_count} synthetic = {len(mixed_objectives)} total")
         
         return mixed_objectives
     
