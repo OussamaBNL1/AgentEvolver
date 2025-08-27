@@ -141,7 +141,6 @@ def union_gen_batch_via_task_id(tasks, batch: DataProto, gen_batch_output: DataP
     return batch_final
 
 
-
 class BeyondAgentRayPPOTrainer(RayPPOTrainer):
     """
     Note that this trainer runs on the driver process on a single CPU/GPU node.
@@ -1044,7 +1043,15 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                             config=self.config.algorithm,
                         )
-                        # breakpoint()
+                        
+                        # Apply decay factor of 0.5 to non_tensor_batch['extras'][i]['evaluator'] != 'env'
+                        assert 'extras' in batch.non_tensor_batch
+                        if 'extras' in batch.non_tensor_batch:
+                            for i in range(len(batch.non_tensor_batch['extras'])):
+                                assert 'evaluator' in batch.non_tensor_batch['extras'][i]
+                                evaluator = batch.non_tensor_batch['extras'][i]['evaluator']
+                                if evaluator != 'env':
+                                    batch.batch["advantages"][i] *= 0.5
 
                     # update critic
                     if self.use_critic:
