@@ -23,7 +23,7 @@ from beyondagent.module.env_manager.env_worker import EnvWorker
 from beyondagent.module.trainer.ba_async_llm_server_manager import BaAsyncLLMServerManager
 from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory, Sample
-
+from beyondagent.utils.step_parser import parse_response_ids_to_steps
 
 class ParallelEnvManager(object):
     def __init__(self, config: DictConfig, async_rollout_manager: BaAsyncLLMServerManager, max_parallel: int,
