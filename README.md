@@ -31,7 +31,7 @@ uv pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --
 # create link to verl
 uv pip install -e external/verl -i https://mirrors.aliyun.com/pypi/simple/
 # finally, install flash attention (must be installed at last, need to connect to github)
-uv pip install --verbose flash-attn ring-flash-attn -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --no-build-isolation
+uv pip install --verbose flash-attn==2.7.4.post1 ring-flash-attn -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --no-build-isolation
 ```
 
 
