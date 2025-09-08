@@ -44,8 +44,6 @@ actor_rollout_ref:
     magnify_success: False
     train_history_infer_token: True
 
-    magnify_success: False
-    train_history_infer_token: True
   model:
     path: /mnt/data/zouanni.zan/models/Qwen2.5-14B-Instruct
     
