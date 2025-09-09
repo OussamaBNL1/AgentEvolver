@@ -1196,7 +1196,9 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
                             # 写回 advantages，供后续 actor/critic 更新
                             batch.batch["advantages"] = out["advantages"]
-                            assert advantages.shape == batch.batch["old_log_prob"].shape == batch.batch["response_mask"].shape, f"shape mismatch: adv={advantages.shape}, old_logp={batch.batch["old_log_prob"].shape}, mask={batch.batch["response_mask"].shape}"
+                            _old_log_prob = batch.batch["old_log_prob"] 
+                            _response_mask = batch.batch["response_mask"]
+                            assert advantages.shape == _old_log_prob.shape == _response_mask.shape, f"shape mismatch: adv={advantages.shape}, old_logp={_old_log_prob.shape}, mask={_response_mask.shape}"
 
                             # ✅ 并入 decouple 统计指标（若存在）
                             if isinstance(out, dict) and "metrics" in out and isinstance(out["metrics"], dict):
