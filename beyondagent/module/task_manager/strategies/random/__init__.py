@@ -106,7 +106,8 @@ class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
         system_prompt, user_prompt = get_task_summarize_prompt(
             [trajectory], old_objectives, appworld.user_profile # FIXME debug profile
         )
-        assert user_prompt.find("You must follow these pattern to generate query") !=-1
+        # FIXME debug
+        assert user_prompt.find("You must follow these pattern to generate query") !=-1, f"user prompt must contain 'You must follow these pattern to generate query': {user_prompt}"
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},

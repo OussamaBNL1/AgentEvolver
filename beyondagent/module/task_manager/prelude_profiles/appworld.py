@@ -241,4 +241,4 @@ Create/Update phone alarms:
 user_profile.reg_entities([venmo, amazon, spotify, gmail, simplenote, phone, todoist, splitwise, filesystem])
 
 user_profile_wo_rubric=copy.deepcopy(user_profile)
-user_profile._rubrics.clear()
+user_profile_wo_rubric._rubrics.clear() # clear the rubrics
