@@ -1,0 +1,114 @@
+data:
+  max_prompt_length: 1024
+  max_response_length: 1024
+  train_batch_size: 256
+  val_batch_size: 256
+  return_raw_chat: True
+
+actor_rollout_ref:
+  hybrid_engine: True
+  actor:
+    loss_agg_mode: token-mean
+    clip_ratio_high: 0.28
+    ppo_mini_batch_size: 4
+    off_cliprange_high: 1.0   # off-policy样本的cliph
+  rollout:
+    name: vllm
+    mode: async
+    debug_llm_io: False
+    multi_turn:
+      completion_callback: beyondagent.module.trainer.simple_completion_callback.SimpleCompletionCallback
+      enable: True
+      format: llama3_json
+      max_steps: 30
+      tool_config_path: ""
+    custom_dataflow_cls:
+      path: ""
+      name: ""
+    use_qwen3: True
+    max_env_worker: 32
+    context_template: "linear"
+    context_template_train_sp_action: False
+    max_model_len: 20480
+    max_env_len: 4096
+    enable_request_id: False
+    sparse: True
+    magnify_success: False
+    train_history_infer_token: True
+  model:
+    path: /mnt/data/zouanni.zan/models/Qwen2.5-14B-Instruct
+
+
+thread_pool:
+  max_workers: 5
+
+env_service:
+  env_type: "appworld"
+  env_url: "http://127.0.0.1:8080"
+  env_feedin_preference: code # code, text, box
+
+task_manager:
+  train_data_path: tasks_explored.train.json # tasks will be explored once if set. use it if you want to keep the same explorations.
+  val_data_path: tasks_explored.val.json # tasks will be explored once if set. use it if you want to keep the same explorations.
+  llm_client: qwen-plus # policy, or other llm name provided in DashScopeClient
+  # 0 - stop exploration
+  n: 0
+  bs: ${data.train_batch_size} # this should be the same as train_batch_size
+  num_explore_threads: ${thread_pool.max_workers}
+
+  mixture:
+    use_original_tasks: True
+    original_data_ratio: 1.0
+    synthetic_data_ratio: 0.0
+    shuffle: True
+
+  grader:
+    original_grader: env
+    synthetic_grader: llm
+
+  strategy: random
+  strategy_args:
+    max_explore_step: 30
+    max_llm_retries: 3
+    env_url: ${env_service.env_url}
+    exploration_llm_temperature: 1.0
+    exploration_llm_top_p: 1.0
+    exploration_llm_top_k: 100
+
+  # strategy: deduplication
+  # strategy_args:
+  #   max_explore_step: 20
+  #   max_llm_retries: 3
+  #   env_url: ${env_service.env_url}
+  #   exploration_llm_temperature: 1.0
+  #   exploration_llm_top_p: 1.0
+  #   exploration_llm_top_k: 1
+  #   task_summary_history_length: 10 # the size of sliding windows used in task summarization
+
+  #   # where to cache the embeddings
+  #   temp_db_path: ./.temp_vec_db
+  #   # similarity threshold. two trajectories are considered arriving at the same state if their embeddings are above this threshold.
+  #   state_similarity_threshold: 0.95
+
+
+experience_maker:
+  base_url: "http://127.0.0.1:8001"
+  workspace_id: "default"
+  enable_summarizer: False
+  enable_context_generator: False
+  retrieve_top_k: 3
+  updated_freq: 0   # 更新经验池的频率(这里表示k个steps)
+  val_summarizer_save: False
+
+
+hybrid_experience_training:
+  enable: False
+  val_rollout_expmode: "mixed"    # dev集上rollout是否加经验: ["mixed", "all", "woexp"]
+  train_rollout_expmode: "mixed"  # train集上rollout是否加经验: ["mixed", "all", "woexp"]
+  rollout_expratio: 0.5           # rollout时在group内部加经验的比例, train&val 保持一致
+  train_sample_expmode: "keep"    # train集上rollout之后转换成训练样本保留/剔除/混合经验: ["keep", "discard", "hybrid"]
+  train_sample_keepratio: 0.5     # task-level多少比例选择保留经验
+  experience_template: "\n\nSome Related Experience to help you to complete the task:<EXP>{}</EXP>"  # 插入经验的模版
+
+trainer:
+  val_only: False

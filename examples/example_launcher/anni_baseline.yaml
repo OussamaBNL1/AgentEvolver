@@ -1,0 +1,104 @@
+hydra:
+  searchpath:
+    - file://external/verl/verl/trainer/config
+    - file://config
+
+defaults:
+  - ppo_trainer
+  - beyond_agent_dataflow_for_launcher
+  - _self_
+
+env_service:
+  env_url: http://localhost:8000
+
+experience_maker:
+  base_url: http://localhost:8001
+  enable_context_generator: False
+  enable_summarizer: False
+  workspace_id: "default"
+  updated_freq: 0
+
+actor_rollout_ref:
+  rollout:
+    val_kwargs:
+      n: 8
+      temperature: 0.9
+    enable_request_id: False
+    sparse: True
+    prompt_length: 20480
+    response_length: 4096
+    max_model_len: 20480
+    temperature: 0.9
+    use_qwen3: False
+    log_prob_micro_batch_size_per_gpu: 1
+    tensor_model_parallel_size: 2
+    name: vllm
+    mode: async
+    gpu_memory_utilization: 0.6
+    n: 8
+
+  actor:
+    clip_ratio_high: 0.28
+    off_cliprange_high: 0.4
+    optim:
+      lr: 1e-6
+    ppo_mini_batch_size: 8
+    ppo_micro_batch_size_per_gpu: 1
+    use_kl_loss: True
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+    entropy_coeff: 0
+    fsdp_config:
+      param_offload: False
+      optimizer_offload: False
+    ppo_max_token_len_per_gpu: 20480
+
+  model:
+    path: /mnt/data/zouanni.zan/models/Qwen2.5-14B-Instruct
+    use_remove_padding: True
+    enable_gradient_checkpointing: True
+
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+    fsdp_config:
+      param_offload: True
+    log_prob_max_token_len_per_gpu: 20480
+
+hybrid_experience_training:
+  val_rollout_expmode: woexp
+  train_rollout_expmode: woexp
+  train_sample_expmode: keep
+  rollout_expratio: 0.0
+  train_sample_keepratio: 1.0
+
+algorithm:
+  adv_estimator: grpo
+  use_kl_in_reward: False
+
+data:
+  train_batch_size: 32
+  max_prompt_length: 4096
+  max_response_length: 20480
+  filter_overlong_prompts: True
+  truncation: error
+  return_raw_chat: True
+  train_files: null
+  val_files: null
+
+critic:
+  ppo_max_token_len_per_gpu: 20480
+  forward_max_token_len_per_gpu: 20480
+
+trainer:
+  n_gpus_per_node: 8  # 这里会根据实际GPU数量动态设置
+  critic_warmup: 0
+  logger: ['console', 'swanlab']
+  project_name: ba_debug_anni_25-14b
+  experiment_name: "experiment_name"  # 这里会根据当前时间动态设置
+  nnodes: 1
+  save_freq: -1
+  test_freq: 10
+  total_epochs: 40
+  val_before_train: False
+  validation_data_dir: "experiments/123/validation_log"  # 这里会根据experiment_name动态设置
+  rollout_data_dir: "experiments/123/validation_log"  # 这里会根据experiment_name动态设置
