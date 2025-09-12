@@ -122,33 +122,26 @@ hybrid_experience_training:
 trainer:
   val_only: False
 
-# 统一的语义优势评估配置 - 所有语义评估相关参数都在这里
-semantic_advantage:
-  enable: false                    # 总开关
-  evaluation_type: "local"           # 🔥 新增：评估类型 ("local" 或 "api")
-  mask_type: "loss_mask"          # mask类型
-  mode: "semantic"                 # 模式
-  consistent_scale: 1.0                  # 好步骤缩放因子
-  pos_unconsistent_scale: 0.2                   # 坏步骤缩放因子
-  neg_unconsistent_scale: -0.2              # 负面坏步骤缩放因子
-  concurrent: 20                   # 并发处理数量
-  model: "qwen-max"              # 语义评估使用的模型
-  api_max_retries: 200             # API调用最大重试次数，默认200次
-  adv_norm:
-    enable: false         # 是否做adv归一化
-    level: "batch"       # "batch" 或 "group"
-    group_size: null     # group模式下可覆盖默认repeat大小
-    norm_style: "nostd"
-  llm_evaluation_log_dir: null  # 设置为具体路径来启用，例如："/path/to/llm_evaluation_logs"
-  prm_grpo:
-    enable_prm_grpo: false
-    prm_scheme: decouple           #  allocation | decouple
+# 语义评估和adca_grpo的配置
+attribution_driven_credit_assignment:
+  enable: false                     # 总开关
+  evaluation_type: "api"            # 评估类型 ("local" 或 "api")
+  consistent_scale: 1.0             # 一致步骤缩放因子
+  pos_unconsistent_scale: 0.2       # 不一致步骤缩放因子
+  neg_unconsistent_scale: -0.2      # 不一致步骤负面缩放因子
+  concurrent: 20                    # 并发处理数量
+  model: "qwen-max"                 # 语义评估使用的模型
+  api_max_retries: 200              # API调用最大重试次数，默认200次
+  llm_evaluation_log_dir: null      # 设置为具体路径来启用，例如："/path/to/llm_evaluation_logs"
+  adca_grpo:
+    enable_adca_grpo: false
+    prm_scheme: "decouple"          # allocation | decouple
     do_batch_norm: true
     equal_trajectory_weight: true
     fix_base: 0.2
     alpha: 0.1
     orm_distribution: last_step
-    enable_length_normalization: false   # 新增参数，控制是否进行长度正则化
+    enable_length_normalization: false   # 控制是否进行长度正则化
     prm_epoch: 100
     skip_type: "none"               # "none" | "skip_small_adv" | "skip_all_neg"
     enable_adca_metric: false

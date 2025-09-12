@@ -409,19 +409,19 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             print(f"Warning: Could not set total_training_steps in config. Structure missing? Error: {e}")
 
 
-    def _get_semantic_config(self):
+    def _get_attribution_config(self):
         """
         获取语义评估配置 - 支持API重试配置
         """
-        if not hasattr(self.config, 'semantic_advantage'):
-            raise ValueError("semantic_advantage configuration block is required")
+        if not hasattr(self.config, 'attribution_driven_credit_assignment'):
+            raise ValueError("attribution_driven_credit_assignment configuration block is required")
         
-        config = self.config.semantic_advantage
+        config = self.config.attribution_driven_credit_assignment
         
         # 设置默认的API重试次数
         if not hasattr(config, 'api_max_retries'):
             config.api_max_retries = 200  # 默认200次重试
-            print(f"[semantic_config] Using default api_max_retries: {config.api_max_retries}")
+            print(f"[attribution_config] Using default api_max_retries: {config.api_max_retries}")
         
         return config
 
@@ -1055,12 +1055,12 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
           
                         # shuchang: 0825
-                        # NOTE: PRM-GRPO 先得到 PRM 的 step-reward，再按 DeepSeek-Math 的 GRPO 公式算 token 的 advantage
+                        # NOTE: ADCA-GRPO 先得到 PRM 的 step-reward，再按 DeepSeek-Math 的 GRPO 公式算 token 的 advantage
                         # ==================== Begin PRM GRPO  ====================
-                        sem_cfg = self._get_semantic_config()
-                        enable_prm_grpo = getattr(getattr(sem_cfg, 'prm_grpo', None), 'enable_prm_grpo', getattr(sem_cfg, 'enable_prm_grpo', False))
-                        enable_adca_metric = getattr(getattr(sem_cfg, 'prm_grpo', None), 'enable_adca_metric', getattr(sem_cfg, 'enable_adca_metric', False))
-                        prm_cfg = getattr(sem_cfg, "prm_grpo", None)
+                        attribution_cfg = self._get_attribution_config()
+                        enable_adca_grpo = getattr(attribution_cfg, 'enable', False)
+                        enable_adca_metric = getattr(getattr(attribution_cfg, 'adca_grpo', None), 'enable_adca_metric', getattr(attribution_cfg, 'enable_adca_metric', False))
+                        prm_cfg = getattr(attribution_cfg, "adca_grpo", None)
                         prm_epoch = getattr(prm_cfg, "prm_epoch", 100) 
                         
                         # 走原 compute_advantage 流程（保持兼容）
@@ -1093,7 +1093,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                 batch=batch,
                                 overall_score_source="token_level_rewards",  # PRM-GRPO 使用 ORM
                                 mask_tensor=batch.batch["response_mask"],
-                                save_dir=getattr(sem_cfg, 'llm_evaluation_log_dir', None),
+                                save_dir=getattr(attribution_cfg, 'llm_evaluation_log_dir', None),
                                 global_step=self.global_steps,
                                 epoch=f"train.{epoch}.{i}",
                                 skip_type=getattr(prm_cfg, 'skip_type', "skip_small_adv"),
@@ -1156,7 +1156,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             })
                             # --- 指标统计：PRM评估结果统计信息 ---
                             
-                        if enable_prm_grpo and epoch < prm_epoch:
+                        if enable_adca_grpo and epoch < prm_epoch:
                             # === (C) PRM → GRPO 后缀和 ===
                             from beyondagent.module.credit_manager.adca_grpo import (
                                 compute_prm_grpo_advantages, PRMHyper
@@ -1164,10 +1164,10 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             # 读取语义优势总配置与 PRM 子配置
                             
 
-                            # PRM 超参（权重在 sem_cfg 顶层，fix_base 在 prm_cfg）
-                            _cons = float(getattr(sem_cfg, "consistent_scale", 1.0))
-                            _posu = float(getattr(sem_cfg, "pos_unconsistent_scale", 0.2))
-                            _negu = float(getattr(sem_cfg, "neg_unconsistent_scale", 0.2))
+                            # PRM 超参（权重在 attribution_cfg 顶层，fix_base 在 prm_cfg）
+                            _cons = float(getattr(attribution_cfg, "consistent_scale", 1.0))
+                            _posu = float(getattr(attribution_cfg, "pos_unconsistent_scale", 0.2))
+                            _negu = float(getattr(attribution_cfg, "neg_unconsistent_scale", 0.2))
                             _negu = abs(_negu)
 
                             hyper = PRMHyper(
