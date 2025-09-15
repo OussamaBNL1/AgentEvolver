@@ -24,6 +24,7 @@ from beyondagent.module.trainer.ba_async_llm_server_manager import BaAsyncLLMSer
 from beyondagent.module.task_manager.rewards import grader_manager
 from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory, Sample
+from beyondagent.utils.step_parser import parse_response_ids_to_steps
 # do not delete this line
 from beyondagent.module.task_manager.rewards import LlmAsJudgeRewardCalculator,LlmAsJudgeRewardCalculatorWithGT,LlmAsJudgeBinaryRewardCalculator,LlmAsJudgeBinaryRewardCalculatorWithGT,EnvGrader, AvgBinaryGTJudge, AvgLlmJudge
 from beast_logger import register_logger
@@ -373,6 +374,8 @@ class ParallelEnvManager(object):
 
     def samples_to_dataproto(self, samples: list[Sample]) -> DataProto:
         # Initialize lists to store batched data
+        step_ids_list  = []
+        steps_texts_list = []           
         prompt_ids, response_ids = [], []
         prompt_attention_mask, response_attention_mask = [], []
         prompt_position_ids, response_position_ids = [], []
@@ -399,8 +402,25 @@ class ParallelEnvManager(object):
 
             # Warn if response is longer than expected (but still include it)
             if len(sample.response_ids) > self.config.data.max_response_length:
+                logger.warning(
+                    f"Sample {sample.request_id} has response_ids length {len(sample.response_ids)} "
+                    f"greater than max_response_length {self.config.data.max_response_length}."
+                )
                 raise RuntimeError(f"Sample has prompt_ids length {len(sample.prompt_ids)} ")
 
+            # ------------- shuchang 0714: append step_ids and steps_texts ------------
+            resp_ids = sample.response_ids
+            # shuchang: 0809
+            # FIXME: 解决stepid对不齐的问题，使用统一的step解析函数parse_response_ids_to_steps 
+            resp_ids = sample.response_ids
+            parse_result = parse_response_ids_to_steps(resp_ids, self.tokenizer)
+            step_ids_list.append(torch.tensor(parse_result.step_ids, dtype=torch.long))
+            # 生成steps结构（用于语义评估）
+            steps_texts_list.append([
+                {"action": s["action_text"], "observation": s["observation_text"]} 
+                for s in parse_result.steps
+            ])
+            
             # Append tensors to respective lists
             assert len(sample.prompt_ids) != 0
             assert len(sample.response_ids) != 0
@@ -436,6 +456,16 @@ class ParallelEnvManager(object):
         assert max_response_length_this_batch <= self.config.data.max_response_length
 
         # Batch and pad sequences
+        # ------------- shuchang 0714: pad step_ids and steps_texts ------------
+        step_ids_pad = pad_sequence(
+            step_ids_list, batch_first=True, padding_value=-1
+        )
+        step_ids_pad = pad_sequence_to_length(
+            step_ids_pad, self.config.data.max_response_length, -1
+        )
+        # ------------- shuchang 0714: pad step_ids and steps_texts ------------
+    
+
         prompt_ids =            pad_sequence(prompt_ids, batch_first=True, padding_value=self.pad_token_id, padding_side="left")
         prompt_attention_mask = pad_sequence(prompt_attention_mask, batch_first=True, padding_value=0, padding_side="left")
         prompt_position_ids =   pad_sequence(prompt_position_ids, batch_first=True, padding_value=0, padding_side="left")
@@ -466,6 +496,9 @@ class ParallelEnvManager(object):
         attention_mask = torch.cat((prompt_attention_mask, response_attention_mask), dim=-1)
         position_ids = torch.cat((prompt_position_ids, response_position_ids), dim=-1)
         loss_mask = torch.cat((prompt_loss_mask, response_loss_mask), dim=-1)
+        # shuchang: construct group_id
+        group_ids = torch.tensor([int(s.data_id) for s in samples], dtype=torch.long)
+				# Validate masks have same shape
         exp_mask = torch.cat((prompt_exp_mask_list, response_exp_mask_list), dim=-1)
 
         assert exp_mask.shape == loss_mask.shape, f"Shape mismatch: {exp_mask.shape} vs {loss_mask.shape}"
@@ -479,10 +512,13 @@ class ParallelEnvManager(object):
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
                 "loss_mask": loss_mask,
-                "exp_mask": exp_mask        # add exp_mask by ANNI
+                "exp_mask": exp_mask,        # add exp_mask by ANNI
+                "step_ids": step_ids_pad,
+                "group_ids": group_ids,   # ★ 新增groupid
             },
             batch_size=len(samples),
         )
+
 
         return DataProto(
             batch=batch,
@@ -491,6 +527,7 @@ class ParallelEnvManager(object):
                 "rollout_ids": np.array(rollout_ids),
                 "messages": np.array(messages),
                 "reward_scores": np.array(reward_scores),
-                "extras": np.array(extras)
+                "extras": np.array(extras),
+                "steps": np.array(steps_texts_list, dtype=object)
             }
         )

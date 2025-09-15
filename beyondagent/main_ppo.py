@@ -83,6 +83,9 @@ def run_ppo(config) -> None:
             num_cpus=config.ray_init.num_cpus,
         )
 
+    max_model_len: int = config.actor_rollout_ref.rollout.max_model_len
+    assert config.data.max_prompt_length + config.data.max_response_length <= max_model_len, f"max_prompt_length {config.data.max_prompt_length} + max_response_length {config.data.max_response_length} should be <= max_model_len {max_model_len}"
+
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))
 
@@ -187,7 +190,7 @@ class TaskRunner:
         resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
         from verl.utils.dataset.rl_dataset import collate_fn
-        
+
         # init task manager
         llm_client=DashScopeClient(model_name=config.task_manager.llm_client)
         train_task_manager=TaskManager(

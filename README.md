@@ -54,3 +54,32 @@ cd your_verl_root_dir
 bash examples/run_qwen2.5-3b_dataflow_2gpu.sh
 ```
 
+## Launcher Usage
+
+`Launcher` is a one-stop experiment manager that can start and backup experiments automatically.
+
+1. Launching experiment from yaml, start environment service manually.
+
+```bash
+python launcher.py --conf examples/example_launcher/anni_baseline.yaml
+```
+
+
+2. Launching environment service with `Launcher` (using appworld as example)
+    - edit `./.env`, or use `export`
+    ```bash
+    APPWORLD_PATH=...
+    APPWORLD_ACTIVATION=...
+    ```
+
+    - run
+    ```bash
+    python launcher.py --with-appworld
+    ```
+
+
+3. Launching environment service **before** starting the training. (Automatically capture the success message of environment service)
+
+```bash
+python launcher.py --conf examples/example_launcher/anni_baseline.yaml --with-appworld
+```
