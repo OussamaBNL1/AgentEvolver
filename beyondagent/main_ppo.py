@@ -15,6 +15,7 @@
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
 # from best_logger import register_logger
+import torch
 from beyondagent.client.llm_client import DashScopeClient
 from beyondagent.module.task_manager.base import NaiveTaskObjectiveRetrieval
 from beyondagent.module.task_manager.data_mixture import OriginalOnlyStrategy, UnifiedMixtureStrategy
@@ -32,6 +33,55 @@ from beyondagent.module.task_manager.env_profiles import EnvProfile
 from verl.trainer.ppo.reward import load_reward_manager
 
 from beyondagent.module.trainer.ba_ray_trainer import BeyondAgentRayPPOTrainer
+
+from verl.trainer.ppo import core_algos
+if "kl_control" in os.environ.get("DEBUG_ARG",""):
+    print("monkeypatching kl loss")
+    def kl_penalty(logprob: torch.FloatTensor, ref_logprob: torch.FloatTensor, kl_penalty) -> torch.FloatTensor:
+        """Compute KL divergence given logprob and ref_logprob.
+        Copied from https://github.com/huggingface/trl/blob/main/trl/trainer/ppo_trainer.py#L1104
+        See more description in http://joschu.net/blog/kl-approx.html
+
+        Args:
+            logprob:
+            ref_logprob:
+
+        Returns:
+
+        """
+        if kl_penalty in ("kl", "k1"):
+            res = logprob - ref_logprob
+        elif kl_penalty == "abs":
+            res = (logprob - ref_logprob).abs()
+        elif kl_penalty in ("mse", "k2"):
+            res = 0.5 * (logprob - ref_logprob).square()
+        elif kl_penalty in ("low_var_kl", "k3"):
+            kl = ref_logprob - logprob
+            # For numerical stability
+            kl = torch.clamp(kl, min=-20, max=20)
+            ratio = torch.exp(kl)
+            kld = (ratio - kl - 1).contiguous()
+            res = torch.clamp(kld, min=-10, max=10)
+        elif kl_penalty == "full":
+            # so, here logprob and ref_logprob should contain the logits for every token in vocabulary
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
+        
+        assert res.dim() == 2, f"kl_penalty should be 2-dim tensor, but got {res.dim()}-dim tensor"
+        # 对 kl 进行权重控制，前重后轻
+        import beyondagent.utils.utils as ut
+        lengths=(res!=0).int().sum(dim=-1)
+        weights=ut.get_batched_exponential_decay_weights_vectorized(lengths.tolist())
+        res=res*weights.unsqueeze(-1)
+        return res
+    
+    core_algos.kl_penalty = kl_penalty
+    print("patched")
+        
+        
+
+
 
 def get_custom_reward_fn(config):
     """

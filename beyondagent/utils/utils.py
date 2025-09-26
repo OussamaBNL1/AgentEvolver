@@ -1,4 +1,5 @@
 from typing import Any, List, Dict
+import torch
 from loguru import logger
 
 # apply chat_template to a message, and then convert back to message
@@ -66,3 +67,65 @@ def clip_state_content_correctly(tokenizer, state_content: str, max_env_len: int
     # 最终fallback：使用原始的字符截断方法
     logger.error("All token-based truncation methods failed, falling back to character truncation")
     return state_content[:max_env_len]
+
+
+def get_batched_exponential_decay_weights_vectorized(
+    lens: list[int],
+    start_val: float = 10.0,
+    end_val: float = 1.0,
+    decay_reach_percent: float = 0.85,
+    padding_value: float = 0.0,
+    device: str | torch.device | None = None,
+) -> torch.Tensor:
+    """
+    高效地、一次性地为一批长度生成指数衰减权重。
+    此版本完全向量化，避免了Python循环。
+
+    Args:
+        lens (list[int]): 包含多个长度的列表。
+        start_val (float): 第0个位置的权重值。
+        end_val (float): 权重衰减趋近的最终值。
+        decay_reach_percent (float): 权重衰减到接近最终值的点，占总长度的百分比。
+        padding_value (float): 用于填充无效位置的数值。
+        device: The desired device of the output tensor.
+
+    Returns:
+        torch.Tensor: 一个形状为 (len(lens), max(lens)) 的2D权重张量。
+    """
+    if not lens:
+        return torch.empty(0, 0, device=device)
+
+    # 1. 准备工作: 获取批次大小、最大长度，并将lens转为张量
+    batch_size = len(lens)
+    max_len = max(lens)
+    lens_tensor = torch.tensor(lens, dtype=torch.float32, device=device)
+
+    # 2. 向量化计算每个序列的衰减率 `decay_rate`
+    # 注意：这里的每个变量都是一个向量，长度为 batch_size
+    amplitude = start_val - end_val
+    # 减1是为了得到正确的索引范围 [0, length-1]
+    # 使用 clamp(min=1) 避免 length 为 1 时出现除以 0 的情况
+    decay_end_index = (lens_tensor - 1).clamp(min=1) * decay_reach_percent
+    
+    # decay_rate 是一个形状为 (batch_size,) 的张量
+    decay_rate = -torch.log(torch.tensor(0.01, device=device)) / decay_end_index
+    
+    # 3. 创建二维的 indices 和 decay_rate 以利用广播机制
+    # indices 的形状: (max_len,) -> [0, 1, ..., max_len-1]
+    indices = torch.arange(max_len, device=device)
+    
+    # decay_rate 的形状: (batch_size,) -> (batch_size, 1)
+    # 这样它就可以和 indices [max_len,] 进行广播，结果形状为 (batch_size, max_len)
+    exponent = -decay_rate.unsqueeze(1) * indices
+    
+    # 4. 一次性计算所有权重（这是一个完整的 BxL 矩阵）
+    calculated_weights = amplitude * torch.exp(exponent) + end_val
+    
+    # 5. 创建掩码 (mask) 以将无效位置的值设为 padding_value
+    # mask 的形状: (batch_size, max_len)
+    mask = indices < lens_tensor.unsqueeze(1)
+    
+    # 6. 应用掩码，只保留有效长度内的权重值
+    final_weights = torch.where(mask, calculated_weights, torch.tensor(padding_value, device=device))
+    
+    return final_weights
