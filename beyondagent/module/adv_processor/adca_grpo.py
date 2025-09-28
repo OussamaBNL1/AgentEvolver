@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 import torch
 import math
+from beyondagent.module.adv_processor.prompt import get_positive_mask
 
 # =========================
 # Hyper & small utilities
@@ -181,87 +182,6 @@ def _group_zscore_on_steps(
     return step_rewards_std
 
 
-def _per_traj_scale_to_target_sum(
-    r_std: List[float],
-    target_sum: float,
-    eps: float,
-) -> List[float]:
-    """
-    Scales the step rewards of a trajectory so that their sum equals a target value.
-    If the current sum of the rewards is close to zero, it evenly distributes the target sum across all steps.
-
-    Args:
-        r_std (List[float]): The list of standardized step rewards.
-        target_sum (float): The target sum value.
-        eps (float): A small constant for numerical stability.
-
-    Returns:
-        List[float]: The scaled step rewards.
-    """
-    if len(r_std) == 0:
-        return []
-    cur = sum(r_std)
-    if abs(cur) <= eps:
-        return [target_sum / len(r_std) for _ in r_std]  # ⭐ Evenly distribute the target sum when the current sum is close to zero
-    scale = target_sum / cur  # ⭐ Calculate the scaling factor to reach the target sum
-    return [float(x * scale) for x in r_std]  # ⭐ Apply the scaling factor to each reward
-def _build_fix(
-    orm_scores: torch.Tensor,
-    step_flags: List[List[bool]],
-    step_ids: torch.Tensor,
-    group_ids: torch.Tensor,
-    hyper: PRMHyper,
-) -> List[List[float]]:
-    """
-    Constructs step-level rewards for trajectories with a fixed base reward and adjusts the last step's reward based on the ORM score's sign.
-    Additionally, it performs group-level z-score normalization on the constructed rewards.
-
-    Args:
-        orm_scores (torch.Tensor): Complete ORM scores, shape (B,), used to determine the reward direction.
-        step_flags (List[List[bool]]): Step-level GOOD/BAD flags for each trajectory.
-        step_ids (torch.Tensor): Step identifiers, shape (B, L_resp), -1 indicates non-response tokens.
-        group_ids (torch.Tensor): Group identifiers for group-wise normalization, shape (B,).
-        hyper (PRMHyper): PRM hyperparameter configuration, primarily using the fix_base parameter.
-
-    Returns:
-        List[List[float]]: A list of step-level rewards for each trajectory, with lengths matching the number of steps.
-
-    Example:
-        orm_scores = [2.5, -1.5]  # First trajectory is successful, second is not
-        step_flags = [[True, False, True], [False, True]]  # Step flags for two trajectories
-        hyper.fix_base = 0.2
-        # Output example:
-        # [[0.2, -0.2, 0.2],  # First trajectory: +0.2-0.2+0.2+1.0 = 1.2
-        #  [-0.2, 0.2]]       # Second trajectory: -0.2+0.2-1.0 = -1.0
-    """
-    B = step_ids.size(0)
-    prm_rewards_raw: List[List[float]] = []
-    base = float(hyper.fix_base)
-
-    # ---- 1. 构造原始 PRM 奖励 ----
-    for i in range(B):
-        # 获取当前轨迹的step数量
-        K = _num_steps_from_step_ids(step_ids[i])
-        if K == 0:
-            prm_rewards_raw.append([]); continue
-
-        # 对齐step flags长度，确保与step数量一致
-        flags = _align_flags(step_flags[i] if i < len(step_flags) else [], K, is_success=True)
-
-        # 构造基础PRM奖励：GOOD步骤为+base，BAD步骤为-base
-        r = [(+base if f else -base) for f in flags]
-
-        # 基于ORM分数符号调整最后一步奖励，确保整体奖励方向与ORM一致
-        orm_sign = 1.0 if float(orm_scores[i].item()) > 0 else -1.0
-        if len(r) > 0:
-            r[-1] += orm_sign  # ⭐ Adjust the last step's reward based on the ORM score's sign
-
-        prm_rewards_raw.append(r)
-
-    # ---- 2. 组内 z-score (标准化) ----
-    # 使用 _group_zscore_on_steps 来做组内标准化
-    prm_rewards_norm = _group_zscore_on_steps(prm_rewards_raw, group_ids, hyper)
-    return prm_rewards_norm
 
 def _build_allocation(
     orm_scores: torch.Tensor,
@@ -323,7 +243,7 @@ def _build_allocation(
 
         # 根据ORM分数符号确定轨迹类型和权重分配策略
         raw_orm = float(orm_scores[i].item())
-        is_success = bool(raw_orm > 0)
+        is_success = bool(get_positive_mask(raw_orm))
 
         # 对齐 flags
         flags_i = _align_flags(step_flags[i] if i < len(step_flags) else [], K, is_success)
@@ -365,18 +285,21 @@ def _build_allocation(
 
         # 监控：pre-norm 不变量（sum(r_raw) 与 ORM 符号应一致）
         raw_sum = sum(r_raw)
-        raw_orm_sign = 1.0 if raw_orm > 0 else -1.0
+        is_raw_sum_positive = get_positive_mask(raw_sum, threshold=0.0)
+        raw_orm_sign = 1.0 if is_success else -1.0
         pre_norm_sign_agree_flags.append(1.0 if (raw_sum * raw_orm_sign) > 0 else 0.0)
 
         # 多数派一致性（PRM 标注 vs ORM 方向）
-        if raw_orm > 0:
+        is_good_majority = (n_g > n_b) # 增加一个可读的布尔变量
+        if is_success:
             pos_cnt += 1
-            if n_g > n_b:
+            if is_good_majority:
                 pos_major_good += 1
-        else:
+        else: # not is_success
             neg_cnt += 1
-            if n_b >= n_g:
+            if not is_good_majority: # not (n_g > n_b) 等价于 n_b >= n_g
                 neg_major_bad += 1
+
 
     # ---- 第二阶段：组内 z-score 标准化（获得真正的优势函数）----
     # 使用 _group_zscore_on_steps 函数进行标准化
@@ -420,7 +343,9 @@ def _build_allocation(
         raw_orm = float(orm_scores[i].item())
         good_vals = [v for v, f in zip(vals, flags_i) if f]
         bad_vals  = [v for v, f in zip(vals, flags_i) if not f]
-        if raw_orm > 0:
+        is_orm_positive_current = get_positive_mask(float(orm_scores[i].item()))
+
+        if is_orm_positive_current:
             if good_vals and bad_vals:
                 gap_pos_list.append(float(torch.tensor(good_vals).mean() - torch.tensor(bad_vals).mean()))
         else:
@@ -497,11 +422,11 @@ def _build_allocation(
         per_traj_out_last_abs.append(float(o_last))
 
         # 后置一致性：∑(combined_step_reward) vs 原始 ORM 符号
-        raw_orm_sign = 1.0 if float(orm_scores[i].item()) > 0.0 else -1.0
-        if sum(arr) * raw_orm_sign > 0:
-            sum_step_reward_sign_agree_flags.append(1.0)
-        else:
-            sum_step_reward_sign_agree_flags.append(0.0)
+        is_orm_positive = get_positive_mask(float(orm_scores[i].item()), threshold=0.5)
+        is_sum_positive = get_positive_mask(sum(arr), threshold=0.0)
+        signs_agree = (is_sum_positive == is_orm_positive)
+        sum_step_reward_sign_agree_flags.append(float(signs_agree))
+
 
     # outcome_share_last_mean & alpha_effective
     shares = []
@@ -697,21 +622,24 @@ def _build_decouple(
         per_traj_out_last_abs.append(float(out_last_abs))
 
         # ∑(combined_step_reward) 与「原始」ORM 符号一致性（不使用 z-score 后的符号）
+        is_orm_positive = get_positive_mask(float(orm_full_scores[i].item()), threshold=0.5)
         combined_sum = sum(combined)
-        raw_orm_sign = 1.0 if float(orm_full_scores[i].item()) > 0.0 else -1.0
-        sum_sign_agree_flags.append(1.0 if (combined_sum * raw_orm_sign) > 0 else 0.0)
+        is_sum_positive = get_positive_mask(combined_sum, threshold=0.0)
+        signs_agree = (is_sum_positive == is_orm_positive)
+        sum_sign_agree_flags.append(float(signs_agree))
 
         # PRM 标注在正/负轨迹中的“多数派”一致性
-        flags_i = _align_flags(step_flags[i] if i < len(step_flags) else [], K, is_success=True)
+        flags_i = _align_flags(step_flags[i] if i < len(step_flags) else [], K, is_success=is_orm_positive)
         n_g = sum(1 for f in flags_i if f)
         n_b = K - n_g
-        if raw_orm_sign > 0:
+        is_good_majority = (n_g > n_b) # 增加可读变量
+        if is_orm_positive:
             pos_cnt += 1
-            if n_g > n_b:
+            if is_good_majority:
                 pos_major_good += 1
         else:
             neg_cnt += 1
-            if n_b >= n_g:
+            if not is_good_majority:
                 neg_major_bad += 1
 
         combined_rewards.append(combined)
@@ -895,7 +823,6 @@ def compute_prm_grpo_advantages(
     # ---- 3. ORM处理：计算ORM分数 ----
     # 对token-level奖励求和得到轨迹级ORM分数，用于各个方案的奖励构造
     orm_scores = token_level_rewards.sum(dim=1)   # (B,)
-    # orm_scores = torch.where(orm_sum > 0, torch.ones_like(orm_sum), -torch.ones_like(orm_sum)).to(dtype=torch.float32)  # ⭐ Compute ORM scores based on token-level rewards
 
     # ---- 4. 方案选择阶段：根据scheme选择具体的奖励构造方案 ----
     extra_metrics = {}

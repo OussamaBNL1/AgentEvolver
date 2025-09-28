@@ -16,6 +16,7 @@ from beyondagent.module.adv_processor.semantic_attribution import evaluate_step_
 from beyondagent.module.adv_processor.adca_grpo import (
     compute_prm_grpo_advantages, PRMHyper
 )
+from beyondagent.module.adv_processor.prompt import get_positive_mask
 
 
 def apply_adca_grpo(
@@ -96,7 +97,7 @@ def apply_adca_grpo(
     step_flags = flags if isinstance(flags, list) else flags.get("llm_parsed_flags", [])
     orm_sum = batch.batch.get("token_level_rewards", batch.batch["token_level_scores"]).sum(dim=-1)
 
-    pos_mask = (orm_sum > 0)
+    pos_mask = get_positive_mask(orm_sum)
     neg_mask = ~pos_mask
 
     def _count_for_indices(mask_tensor):

@@ -15,12 +15,13 @@ from typing import List, Tuple, Dict, Optional, Literal
 import threading
 from dataclasses import dataclass, asdict
 import random
-from beyondagent.module.adv_processor.prompt import build_batch_adv_evaluation_prompt, build_batch_reward_evaluation_prompt
+from beyondagent.module.adv_processor.prompt import build_batch_adv_evaluation_prompt, build_batch_reward_evaluation_prompt, get_positive_mask
 
 __all__ = [
     "evaluate_step_flags_parallel",
     "ParallelSemanticProcessor",
 ]
+
 
 @dataclass
 class EvaluationTask:
@@ -374,7 +375,7 @@ async def _evaluate_single_sample_api(
                 f"[API] ❌ Sample {task.sample_idx}: Parse error, "
                 f"disable rescale: {parse_error}"
             )
-            uniform_flag = task.overall_score > 0  # True=GOOD, False=BAD
+            uniform_flag = get_positive_mask(task.overall_score)
             step_results = [uniform_flag for _ in task.steps]
 
         response_time = time.time() - start_time
@@ -415,7 +416,7 @@ async def _evaluate_single_sample_api(
         response_time = time.time() - start_time
         print(f"[parallel_eval] ❌ FAILED to evaluate sample {task.sample_idx}: {e}")
 
-        uniform_flag = task.overall_score > 0
+        uniform_flag = get_positive_mask(task.overall_score)
         step_results = [uniform_flag for _ in task.steps]
 
         if save_dir:
@@ -524,15 +525,12 @@ async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: s
         advantage = _get_overall_advantage(batch.batch["advantages"][sample_idx], sample_mask)
         orm_reward = batch.batch["token_level_rewards"][sample_idx].sum().item()
         if overall_score_source == "token_level_rewards":
-            # PRM-GRPO 模式：使用原始 ORM 奖励
-            # shuchang 0904：reward 0,1 映射为-1,1
-            orm_scores = 1.0 if orm_reward > 0 else -1.0
-            overall_score = orm_scores
+            overall_score = orm_reward
         elif overall_score_source == "advantages":
             # SSA 模式：使用计算后的 advantage
             overall_score = advantage
         else:
-            overall_score = orm_scores
+            overall_score = orm_reward
         # shuchang: 0906
         # 只跳过 advantage 非常小的样本 或 全部为负的样本
         # 决定是否应该跳过当前样本
@@ -553,8 +551,8 @@ async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: s
                 orm_reward (float): The ORM reward value for the sample.
             """
             # 2. 跳过 orm_reward 为负或零的样本
-            # 注意：orm_reward > 0 才是正样本，所以 <= 0 都属于“负”的范畴
-            if orm_reward <= 0:
+            # 注意：orm_reward > 0.5 才是正样本，所以 <= 0.5 都属于“负”的范畴
+            if orm_reward <= THREASHOLD:
                 should_skip = True
                 skip_reason = f"orm_reward is not positive ({orm_reward:.6f})"
 
@@ -562,7 +560,7 @@ async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: s
         if should_skip:
             print(f"[parallel_eval] Sample {sample_idx}: Skipping evaluation due to {skip_reason}. Assigning flags based on overall_score.")
             # 根据 overall_score 的正负来决定 flag 的值
-            flag_value = overall_score > 0
+            flag_value = overall_score > THREASHOLD
             flags_per_sample[sample_idx] = [flag_value] * len(steps_struct)
 
             if save_dir:

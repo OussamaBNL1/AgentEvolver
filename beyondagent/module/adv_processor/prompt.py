@@ -1,4 +1,20 @@
+import torch
+THREASHOLD = 0.5
+def get_positive_mask(scores: torch.Tensor | float, threshold: float = THREASHOLD) -> torch.Tensor | bool:
+    """
+    根据给定的阈值判断分数是否为正向。
+    这个函数可以处理单个浮点数或整个PyTorch张量。
+    用的地方：
+    1. 评估产生prompt
+    2. 评估时的统计信息决定哪些是正trajectory，哪些是负trajectory
+    Args:
+        scores: 一个或一批分数。
+        threshold: 判断正向的阈值。
 
+    Returns:
+        一个布尔值或布尔张量，表示是否为正向。
+    """
+    return scores > threshold
 
 def build_batch_adv_evaluation_prompt(
         query: str,
@@ -18,7 +34,10 @@ def build_batch_adv_evaluation_prompt(
     Returns:
         list[dict]: A list of dictionaries, each containing the system message and the user message for the evaluation prompt.
     """
-    polarity = "positive" if overall_adv > 0.5 else "negative"
+    # polarity = "positive" if overall_adv > 0.5 else "negative"
+    is_pos = get_positive_mask(overall_adv)
+    polarity = "positive" if is_pos else "negative"
+    
     # prompt3
     # sys_msg = (
     #     "You are an expert *process* reward evaluator.\n\n"
@@ -170,7 +189,9 @@ def build_batch_reward_evaluation_prompt(
     Returns:
         list[dict]: A list of dictionaries, each containing a 'role' and 'content' key, representing the system and user messages.
     """
-    polarity = "positive" if overall_adv > 0.5 else "negative"
+    # polarity = "positive" if overall_adv > 0.5 else "negative"
+    is_pos = get_positive_mask(overall_adv)
+    polarity = "positive" if is_pos else "negative"
     
     sys_msg = """You are an expert *process reward evaluator*, specializing in **attributional analysis** of multi-step solution trajectories.
 
