@@ -49,6 +49,7 @@ class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
     def explore(self, task: Task, data_id: str, rollout_id: str) -> list[Trajectory]:
         env_worker = EnvWorker(
             task=task,
+            enable_agent_terminate=True, # agent does not respect the default instruction to solve the problems
             config=self._config, # FIXME 既然一定需要这3个东西就不要设置成 = None
             thread_index=0,
             tokenizer=self._tokenizer

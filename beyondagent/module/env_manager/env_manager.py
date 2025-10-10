@@ -263,8 +263,22 @@ class ParallelEnvManager(object):
                     config=self.config,
                     **kwargs
                 )
+                
+                # detect whether agent is allowed to terminate the conversation
+                if mode == "validate":
+                    enable_agent_terminate = False
+                else:
+                    # TODO: a better way to detect the type of task (openworld or not).
+                    # All original tasks are close world, and all synthetic tasks are open world.
+                    # Agent is allowed to terminate the conversation in open world.
+                    if 'env' in task.evaluator:
+                        enable_agent_terminate = False
+                    elif 'llm' in task.evaluator:
+                        enable_agent_terminate = True
+                    else:
+                        raise ValueError("failed to detect the type of task")
 
-                env_worker = EnvWorker(task=task, thread_index=thread_index, config=self.config, tokenizer=self.tokenizer)
+                env_worker = EnvWorker(task=task, enable_agent_terminate=enable_agent_terminate, thread_index=thread_index, config=self.config, tokenizer=self.tokenizer)
                 trajectory: Trajectory = env_worker.execute(data_id=data_id, rollout_id=rollout_id, add_exp=add_exp, task_train_exp_mode=task_train_exp_mode, agent_flow=agent_flow, tmux=tmux, stop=stop) # ⭐ Execute the task and generate the trajectory
                 return trajectory
 

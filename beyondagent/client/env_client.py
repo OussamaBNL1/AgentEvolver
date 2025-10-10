@@ -18,6 +18,7 @@ class EnvClient:
         instance_id: str = None,
         messages: Dict[str, Any] = None,
         params: Dict[str, Any] = None,
+        **kwargs,
     ) -> Dict:
         """
         Handles making a POST request to the specified API endpoint.
@@ -40,6 +41,7 @@ class EnvClient:
             "instance_id": instance_id,
             "messages": messages or {},
             "params": params or {},
+            **kwargs,
         }
         try:
             response = requests.post(url, json=data, timeout=self.timeout)  # ⭐ Sends the POST request
@@ -94,7 +96,7 @@ class EnvClient:
         return response["data"]
 
     def create_instance(
-        self, env_type: str, task_id: str, instance_id: str = None, params: Dict = None
+        self, env_type: str, task_id: str, enable_agent_terminate:bool = False, instance_id: str = None, params: Dict = None
     ) -> dict:
         """
         Creates an environment instance by sending a request to the API.
@@ -102,6 +104,7 @@ class EnvClient:
         Args:
             env_type (str): The type of the environment to be created.
             task_id (str): The unique identifier for the task.
+            enable_agent_terminate (bool, optional): Whether to allow self-termination. Defaults to False.
             instance_id (str, optional): The unique identifier for the instance. Defaults to None.
             params (Dict, optional): Additional parameters for the environment creation. Defaults to None.
 
@@ -114,6 +117,7 @@ class EnvClient:
             task_id=task_id,
             instance_id=instance_id,
             params=params,
+            enable_agent_terminate=enable_agent_terminate,
         )
         return response["data"]
 

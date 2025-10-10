@@ -269,11 +269,10 @@ class BfclEnv(BaseEnv):
         # function_docs = func_doc_language_specific_pre_processing(functions, test_category)
         # system_prompt = system_prompt_template.format(functions=function_docs)
         tool_prompt = tools_schema_to_qwen_prompt(tools)
-        terminate_prompt = "# Terminate\nYou may terminate the conversation at any time by saying '/terminate'."
         return {
             # system_prompt + "\n\n" + first_query
             "state": [
-                {"role": "system", "content": tool_prompt + "\n\n" + terminate_prompt},
+                {"role": "system", "content": tool_prompt},
                 {"role": "user", "content": first_query}
                 ],
             "info": {
@@ -294,9 +293,6 @@ class BfclEnv(BaseEnv):
         state_msg = self.transition(action, params=params or {}) # change by czy0712
         # state_msg: role=<Role.USER: 'user'> content='' reasoning_content='' tool_calls=[ToolCall(...)] timestamp='2025-xxx' metadata={} tool_call_id=''
         terminated = self._is_terminated(state_msg.simple_dict["content"]) # change by czy0721
-        # check termination by agent
-        if '/terminate' in state_msg.simple_dict["content"]:
-            terminated = True
         reward = self.evaluate(params={"sparse": True}) if terminated else 0.0
         # print('state_msg.simple_dict',state_msg.simple_dict)
         return {

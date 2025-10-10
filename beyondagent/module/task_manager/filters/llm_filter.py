@@ -151,6 +151,7 @@ class LlmFilter(TaskPostFilter):
         try:
             worker = EnvWorker(
                 task.task,
+                enable_agent_terminate=True, # synthetic query are open
                 config=self._config,
                 thread_index=0,
                 tokenizer=self._tokenizer
