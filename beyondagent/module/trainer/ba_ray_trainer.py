@@ -531,18 +531,19 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             assert isinstance(val_seed_dataset,RLHFDataset), "train_dataset must be RLHFDataset"
             self.val_task_manager.load_tasks_from_dataset(val_seed_dataset,env_type=self.config.env_service.env_type)
         else:
-            # shuchang: 'val' or 'test_normal' 为了便于切换成测试test_normal
-            if self.config.data.val_type == 'test_normal' and self.config.env_service.env_type == "appworld":
-                for split in ['test_normal']:
-                    logger.info(f" Use test_normal {split}")
-                    if self.val_task_manager.load_tasks_from_environment(env_client,env_type=self.config.env_service.env_type,split=split)>0:
-                        break
-            else:
+            num_loaded_val_tasks = 0
+            if 'val_on_test' not in os.environ.get('DEBUG_ARG',''):
                 for split in ['val','dev']:
-                    logger.info(f"Use dev {split}")
-                    if self.val_task_manager.load_tasks_from_environment(env_client,env_type=self.config.env_service.env_type,split=split)>0:
-                        break
-
+                    try:
+                        num_loaded_val_tasks += self.val_task_manager.load_tasks_from_environment(env_client,env_type=self.config.env_service.env_type,split=split)
+                    except:
+                        logger.warning(f"failed to load val dataset from environment, split={split}. this may be normal if your dataset is split into train/dev")    
+            else:
+                logger.warning("using test_normal as val dataset")
+                self.val_task_manager.load_tasks_from_environment(env_client,env_type=self.config.env_service.env_type,split="test_normal")
+            
+            assert num_loaded_val_tasks > 0, "failed to load val/dev dataset from environment"
+        
         self.train_dataset=self.train_task_manager.get_or_load_full_dataset(filepath=self.config.task_manager.train_data_path,tokenizer=self.tokenizer,config=self.config.data,processor=self.processor)
         # although limiting dataset to only the original is possibile with strategy, we want to avoid the rollout process on val data.
         self.val_dataset=self.val_task_manager.get_original_dataset(tokenizer=self.tokenizer,config=self.config.data,processor=self.processor)

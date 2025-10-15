@@ -149,7 +149,7 @@ class TaskManager(object):
             logger.info(f"loaded tasks from environment, #tasks={len(self._tasks)}")
         except requests.exceptions.RequestException as e:
             logger.error(f"failed to load tasks from environment: {e}")
-            return 0
+            raise from e
         return len(response)
 
     def register_filter(self, filter: TaskPostFilter):
@@ -472,7 +472,9 @@ class FullDataset(Dataset):
                         tmp.ground_truth = json.loads(line)['ground_truth']
                     self._synthetic_objectives.append(tmp)
         else:
-            logger.warning(f"failed to load objectives from {filepath}, file not found.")
+            # this is a special path to skip loading from file
+            if filepath != '[unknown]':
+                raise FileNotFoundError(f"file {filepath} not found")
             self._synthetic_objectives = []
 
         for item in self._synthetic_objectives:
