@@ -16,6 +16,8 @@ from beyondagent.module.context_manager.cmt_context_clip import SelfContextClipC
 from beyondagent.module.agent_flow.reward_calculator import RewardCalculator
 from typing import Any, Dict, List, Union, Optional
 import threading
+from beyondagent.module.exp_manager.exp_manager import TrajExpConfig, ExperienceWorker
+
 
 log_generate_lock = threading.Lock()
 
@@ -40,9 +42,10 @@ class AgentFlow(BaseAgentFlow):
         # self.experience_template = self.config.hybrid_experience_training.experience_template
         self.cmt: Union[Linear_CMT, LinearThinkCMT] = None
         self.console_debug_mode: bool = self.config.actor_rollout_ref.rollout.debug_llm_io
+        self.exp_worker = ExperienceWorker(config=self.config)
 
 
-    def execute(self, context_manager, init_messages: List[dict], env: EnvClient, instance_id: str, tmux, stop, thread_index, task_id, data_id="", rollout_id="", query="", **kwargs) -> Linear_CMT:
+    def execute(self, context_manager, init_messages: List[dict], env: EnvClient, instance_id: str, tmux, stop, thread_index, task_id, traj_exp_config,data_id="", rollout_id="", query="", **kwargs) -> Linear_CMT:
         """
         Executes the interaction between the AI agent and the environment, managing the context, experience generation, and reward calculation.
 
@@ -55,10 +58,10 @@ class AgentFlow(BaseAgentFlow):
             stop (list): A list indicating whether to stop the thread.
             thread_index (int): The index of the current thread.
             task_id (str): The ID of the task.
+            traj_exp_config (TrajExpConfig): Experience Configuration for the trajectory.
             data_id (str, optional): The ID of the data. Defaults to "".
             rollout_id (str, optional): The ID of the rollout. Defaults to "".
             query (str, optional): The query string. Defaults to "".
-            add_exp (bool, optional): Whether to add experience. Defaults to False.
             **kwargs: Additional keyword arguments.
 
         Returns:
@@ -69,6 +72,14 @@ class AgentFlow(BaseAgentFlow):
         add_nothink = self.config.actor_rollout_ref.rollout.use_qwen3 # if qwen3, add /no_think
 
         # 1. 🚀 Initialize messages
+        traj_exp_config.query = query
+        init_messages, traj_exp_config = self.exp_worker.manage_rollout_context(
+                init_messages=init_messages,
+                traj_exp_config=traj_exp_config
+                )
+        self.cmt.metadata["task_train_exp_mode"] = traj_exp_config.train_mode
+        self.cmt.metadata["add_exp"] = traj_exp_config.add_exp
+        self.cmt.metadata["experience_list"] = traj_exp_config.experience_list
         # init_messages, metadata = self.add_experience(init_messages, task_id, data_id, rollout_id, query, add_exp)  # ⭐ Initialize messages and metadata
         # self.cmt.metadata = metadata
         self.cmt.save_init_input(init_messages, add_nothink)
@@ -160,5 +171,6 @@ class AgentFlow(BaseAgentFlow):
 
         with log_generate_lock:
             self.cmt.generate_log(task_id=task_id)  # ⭐ Generate the log for the task
+
 
         return self.cmt
