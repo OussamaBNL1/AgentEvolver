@@ -17,14 +17,15 @@ This document explains the usage, arguments, and workflow of `launcher.py`, the 
 Run the launcher with desired options. Example:
 
 ```bash
-python launcher.py --kill --conf examples/self-question-nav-attr.yaml --with-appworld --with-exp-maker --with-logview
-# Explaination:
-# --kill:            Kill existing all Python and Ray processes (except VSCode and itself, use with caution if you are running some other training jobs)
-# --conf:            Choose a experiment yaml to launch training (the primary argument)
-# --with-appworld:   Let the launcher help you start `Appworld` environment service, it is smart enough to recognize existing Appworld already running in the background.
-# --with-exp-maker:  Let the launcher help you start `ReMe` environment service, it will check background automatically and avoid re-launching the target service.
-# --with-logview:    Open rollout log viewer. If you are using VSCode, a browser windows will pop out automatically.
+python launcher.py --conf examples/self-question-nav-attr.yaml --python-killer --with-appworld --with-exp-maker --with-logview
 ```
+Explaination:
+- `--conf`: Choose a experiment yaml to launch training (the primary argument).
+- `--python-killer`: Kill existing all Python and Ray processes (except VSCode and itself, use with caution if you are running some other training jobs).
+- `--with-appworld`: Let the launcher help you start `Appworld` environment service (persistent and can avoid re-launching).
+- `--with-exp-maker`: Let the launcher help you start `ReMe` environment service (persistent and can avoid re-launching).
+- `--with-logview`: Open rollout log viewer. If you are using VSCode, a browser windows will pop out automatically.
+
 
 ## Command-Line Arguments
 
@@ -149,3 +150,47 @@ Behavior summary:
 - You can call `vscode_conditional_breakpoint(tag, once=False)` if you need to break every time.
 
 Tip: The approach works well with the Ray Distributed Debugger VSCode extension. See the inline guide in `vsdb.py` for setup screenshots and more details.
+
+## How to add a new environment service
+
+You can extend the launcher with your own background service (similar to AppWorld, WebShop, etc.). The launcher already provides a small helper, `pty_launch(service_name, success_std_string)`, that reads your service settings from environment variables and starts it as a managed, single-instance background process.
+
+Follow these three steps:
+
+1) Add a CLI flag
+
+- Open `launcher.py`, find `parse_args()`, and add a boolean flag for your service. Example for a service named "MyEnv":
+
+   - `parser.add_argument('--with-myenv', action='store_true', default=False, help='Launch MyEnv service')`
+
+2) Call `pty_launch("myenv")` in `main()`
+
+- In `main()`, add a conditional block that calls the helper when the flag is used:
+
+   - `if args.with_myenv: pty_launch("myenv", success_std_string="Uvicorn running on")`
+
+- The second argument is an optional "ready" text the launcher watches for in the service output. Pick a short substring that appears when your service is fully up, e.g.:
+   - "Starting server on"
+   - "Uvicorn running on"
+   - "Listening on"
+
+3) Provide `.env` entries for your service
+
+`launcher.py` loads environment variables via `python-dotenv`. Define two variables so `pty_launch()` knows how and where to start your service:
+
+- `MYENV_PATH`   — Working directory to run the service in (usually the repo/subfolder containing scripts)
+- `MYENV_SCRIPT` — The exact command used to start the service
+
+Example `.env` snippet (place at project root):
+
+```
+# MyEnv service
+MYENV_PATH=/abs/path/to/myenv
+MYENV_SCRIPT=python -m myenv.api --host 0.0.0.0 --port 9009
+```
+
+Quick check:
+
+- After the edits above, try:
+   - `python launcher.py --with-myenv` (add `--kill` to clean stale processes if needed)
+   - Watch logs under `logs/companion/` to confirm startup completes and the ready string appears.
