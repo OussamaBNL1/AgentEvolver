@@ -1,38 +1,61 @@
-```shell
-git clone --recurse-submodules git@gitlab.alibaba-inc.com:EconML/BeyondAgent.git
+
+## 🚀 Quick Start
+### Step 1. Basic Dependency Installation
+
+First, clone all submodule.
+```bash
+git submodule update --init external/verl
 ```
 
+Then, set up the training environment, choose between `uv` and `conda`.
 
-# BeyondAgent
-
-This example demonstrates how to perform agent training for a given environment, e.g. appworld.
-
-### 这种实现方式：
-
-1. 目录结构: 对verl目录下的代码不做任何改动，所有与beyondagent的代码存放在recipe/beyond_agent目录下。
-2. Trainer继承: 继承verl中RayTrainer类，对部分函数进行修改
-3. ParallelEnvManager类：在Trainer中引入ParallelEnvManager类，可通过线程池，并行执行多个dataflow对象（为每个prompt创建一个dataflow对象），并对输出结果进行聚合（upcoming）。
-4. AsyncLLMServerManager类：在ParallelEnvManager中使用verl中的LLMServerManager类，所有dataflow对象共用同一个LLMServerManager，由LLMServerManager同时管理多个vLLM server, 通过ChatScheduler对来自各个线程中dataflow的llm-call进行分发和等待。
-
-
-
-## Installation Guide
+<details>
+<summary>🛠️ Set up environment with uv (Click to read detail)</summary>
 
 ```bash
-# use uv to install deps, you can also choose conda
-uv venv --python=3.11
+# 🧰 setup uv (you can also choose conda if you prefer, but conda is too slow)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv --python=3.11 # If this step is slow, add ENV variable: UV_PYTHON_INSTALL_MIRROR="https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download"
 source .venv/bin/activate
-# clone our verl branch
+# 🌱 clone our verl branch
 git submodule update --init external/verl
-# make sure our pip is ready
+# 🆙 make sure our pip is ready
 uv pip install --upgrade pip setuptools packaging -i https://mirrors.aliyun.com/pypi/simple/
-# install the majority of dependencies
 uv pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --prerelease=allow
-# create link to verl
 uv pip install -e external/verl -i https://mirrors.aliyun.com/pypi/simple/
-# finally, install flash attention (must be installed at last, need to connect to github)
+# ✨ finally, install flash attention (must be installed at last, need to connect to github)
 uv pip install --verbose flash-attn==2.7.4.post1 ring-flash-attn -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --no-build-isolation
 ```
+
+</details>
+<details>
+<summary>🛠️ Set up environment with conda (Click to read detail)</summary>
+
+```bash
+conda create -n appworld python=3.11 -y
+conda activate appworld
+# 🆙 make sure our pip is ready
+pip install --upgrade pip setuptools packaging -i https://mirrors.aliyun.com/pypi/simple/
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --prerelease=allow
+pip install -e external/verl -i https://mirrors.aliyun.com/pypi/simple/
+pip install --verbose flash-attn==2.7.4.post1 ring-flash-attn -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --no-build-isolation
+```
+
+</details>
+
+### Step 2. Setup Env-Service (Appworld as example)
+The script below sets up an environment for appworld. For other environment setup, refer to [docs/guidelines/env_service.md](docs/guidelines/env_service.md) 📄
+
+```bash
+cd env_service/environments/appworld && bash setup.sh
+```
+
+### Step 3. Begin Training! 🚀 🚀
+
+```bash
+python launcher.py --conf examples/self-question-attr.yaml --with-appworld --with-logview
+```
+
 
 
 ## Usage

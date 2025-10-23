@@ -28,7 +28,6 @@ from beyondagent.utils.step_parser import parse_response_ids_to_steps
 # do not delete this line
 from beyondagent.module.task_manager.rewards import LlmAsJudgeRewardCalculator,LlmAsJudgeRewardCalculatorWithGT,LlmAsJudgeBinaryRewardCalculator,LlmAsJudgeBinaryRewardCalculatorWithGT,EnvGrader, AvgBinaryGTJudge, AvgLlmJudge
 from beast_logger import register_logger
-
 from beyondagent.module.exp_manager.exp_manager import TaskExpConfig, TrajExpConfig
 
 
@@ -43,11 +42,12 @@ def init_logger(experiment_name):
     os.environ['BEST_LOGGER_INIT'] = '1'
     os.environ['BEST_LOGGER_WEB_SERVICE_URL'] = "http://127.0.0.1:8181/"
     from datetime import datetime
-    final_log_path = os.path.join( "./logs", datetime.now().strftime("%Y_%m_%d_%H_%M") + '_' + experiment_name )
+    final_log_path = os.path.join( "experiments", experiment_name, "trace_rollout", datetime.now().strftime("%Y_%m_%d_%H_%M"))
     non_console_mods = ["conversation", "rollout", "token_clip", "bad_case", "env_clip"]
     register_logger(mods=["evaluation", "exception"], non_console_mods=non_console_mods, auto_clean_mods=[], base_log_path=final_log_path, debug=False)
-    print('Run `beast_logger_install` and click the url to inspect rollout logs. Continue in 5 seconds')
-    time.sleep(5)
+    print('Run `beast_logger_go` and click the url to inspect rollout logs. Continue in 5 seconds')
+    time.sleep(2.5)
+
 
 
 class ParallelEnvManager(object):
@@ -488,7 +488,7 @@ class ParallelEnvManager(object):
             # ------------- shuchang 0714: append step_ids and steps_texts ------------
             resp_ids = sample.response_ids
             # shuchang: 0809
-            # FIXME: 解决stepid对不齐的问题，使用统一的step解析函数parse_response_ids_to_steps 
+            # FIXME: 解决stepid对不齐的问题，使用统一的step解析函数parse_response_ids_to_steps
             resp_ids = sample.response_ids
             parse_result = parse_response_ids_to_steps(resp_ids, self.tokenizer) # ⭐ Parse the response IDs into step IDs and texts
 

@@ -4,6 +4,7 @@ data:
   train_batch_size: 256
   val_batch_size: 256
   return_raw_chat: True
+  val_type: 'val' # shuchang: 'val' or 'test_norm' 为了便于切换成测试test_norm
 
 actor_rollout_ref:
   hybrid_engine: True
@@ -33,14 +34,12 @@ actor_rollout_ref:
     max_env_len: 4096
     enable_request_id: False
     sparse: True
-    magnify_success: False
-    train_history_infer_token: True
+
   model:
     path: /mnt/data/zouanni.zan/models/Qwen2.5-14B-Instruct
 
-
 thread_pool:
-  max_workers: 5
+  max_workers: 8
 
 env_service:
   env_type: "appworld"
@@ -53,6 +52,7 @@ task_manager:
   llm_client: qwen-plus # policy, or other llm name provided in DashScopeClient
   # 0 - stop exploration
   n: 0
+  env_profile: cookbook/env_profiles/appworld.json # env profiles used in exploration. If you set n to 0, just ignore this.
   bs: ${data.train_batch_size} # this should be the same as train_batch_size
   num_explore_threads: ${thread_pool.max_workers}
 
@@ -68,7 +68,7 @@ task_manager:
   strategy: random
   strategy_args:
     max_explore_step: 30
-    max_llm_retries: 3
+    max_llm_retries: 6
     env_url: ${env_service.env_url}
     exploration_llm_temperature: 1.0
     exploration_llm_top_p: 1.0
@@ -89,6 +89,9 @@ task_manager:
   #   # similarity threshold. two trajectories are considered arriving at the same state if their embeddings are above this threshold.
   #   state_similarity_threshold: 0.95
 
+critic:
+  ppo_max_token_len_per_gpu: 25580
+  forward_max_token_len_per_gpu: 25580
 
 experience_maker:
   base_url: "http://127.0.0.1:8001"
@@ -100,14 +103,43 @@ experience_maker:
   val_summarizer_save: False
 
 
-hybrid_experience_training:
-  enable: False
-  val_rollout_expmode: "mixed"    # dev集上rollout是否加经验: ["mixed", "all", "woexp"]
-  train_rollout_expmode: "mixed"  # train集上rollout是否加经验: ["mixed", "all", "woexp"]
-  rollout_expratio: 0.5           # rollout时在group内部加经验的比例, train&val 保持一致
-  train_sample_expmode: "keep"    # train集上rollout之后转换成训练样本保留/剔除/混合经验: ["keep", "discard", "hybrid"]
-  train_sample_keepratio: 0.5     # task-level多少比例选择保留经验
+exp_manager:
+  val_rollout_expmode: "woexp"    # dev集上rollout是否加经验: ["mixed", "all", "woexp"]
+  train_rollout_expmode: "woexp"  # train集上rollout是否加经验: ["mixed", "all", "woexp"]
+  rollout_expratio: 0.0           # rollout时在group内部加经验的比例, train&val 保持一致
+  train_sample_expmode: "alldiscard"    # train集上rollout之后转换成训练样本保留/剔除/混合经验: ["allkeep", "alldiscard", "hybrid"]
+  train_sample_keepratio: 1.0     # task-level多少比例选择保留经验
   experience_template: "\n\nSome Related Experience to help you to complete the task:<EXP>{}</EXP>"  # 插入经验的模版
+  init_experience_before_training: False  # 是否在训练之前初始化经验池
+  init_experience_only: False  # 是否只初始化经验池
 
 trainer:
   val_only: False
+  val_before_train: True
+  experiment_name: 'read_yaml_name'
+
+# 语义评估和adca_grpo的配置
+attribution_driven_credit_assignment:
+  enable: false                     # 总开关
+  evaluation_type: "api"            # 评估类型 ("local" 或 "api")
+  consistent_scale: 1.0             # 一致步骤缩放因子
+  pos_unconsistent_scale: 0.2       # 不一致步骤缩放因子
+  neg_unconsistent_scale: -0.2      # 不一致步骤负面缩放因子
+  concurrent: 5                    # 并发处理数量
+  model: "qwen-plus"                 # 语义评估使用的模型
+  api_max_retries: 200              # API调用最大重试次数，默认200次
+  llm_evaluation_log_dir: null      # 设置为具体路径来启用，例如："/path/to/llm_evaluation_logs"
+  adca_grpo:
+    prm_scheme: "decouple"          # allocation | decouple
+    do_batch_norm: true
+    equal_trajectory_weight: true
+    fix_base: 0.2
+    alpha_cosine_decay_enable: false   # true 或 false（关闭后就用常数 alpha）
+    alpha: 0.1
+    alpha_min: 0.0      # 纯余弦的下限
+    total_steps: 100    # 训练总步数（用于 p = global_steps/total_steps）
+    orm_distribution: last_step
+    enable_length_normalization: false   # 控制是否进行长度正则化
+    prm_steps: 100
+    skip_type: "none"               # "none" | "skip_small_adv" | "skip_all_neg"
+    enable_adca_metric: false
