@@ -118,19 +118,47 @@ python launcher.py --conf examples/self-question-attr.yaml --with-appworld --wit
 ```
 
 ## 🧩 Advanced Usage
-submodule doc list
+
+For detailed usage and customization, please refer to the following guidelines:
+
+- **[Environment Service](docs/guidelines/env_service.md)** - Set up and manage environment instances, integrate custom environments
+- **[Task Manager](docs/guidelines/task_manager.md)** - Explore environments, generate synthetic tasks, and curate training data for agent evolution
+
+For API documentation and more details, visit our [documentation site](docs/index.md).
 
 ## 🌟 Benchmark Performance
-add some result here
+
+Performance comparison on the AppWorld and BFCL-v3 benchmarks. AgentEvolver achieves superior results while using substantially fewer parameters than larger baseline models.
+
+<p align="center">
+ <img src="docs/img/performance.png" alt="Benchmark Performance" width="80%">
+</p>
+
+Performance on two benchmarks. Columns show avg@8 and best@8 for each benchmark, plus their averages (Avg.). All values are in percent (%). **Bolded numbers** highlight the best results.
+
+| **Model** | **Params** | **AppWorld** | | **BFCL v3** | | **Avg.** | |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| | | avg@8 | best@8 | avg@8 | best@8 | avg@8 | best@8 |
+| Qwen2.5-7B | 7B | 1.8 | 5.6 | 29.8 | 42.4 | 15.8 | 24.0 |
+| +Questioning | 7B | 23.2 | 40.3 | 49.0 | 60.6 | 36.1 | 50.5 |
+| +Questioning&Navigating | 7B | 26.3 | 43.1 | 53.3 | 61.0 | 39.8 | 52.1 |
+| +Questioning&Attributing | 7B | 25.7 | 43.7 | 56.8 | 65.3 | 41.3 | 54.5 |
+| **AgentEvolver (overall)** | **7B** | **32.4** | **51.2** | **57.9** | **69.0** | **45.2** | **60.1** |
+| | | | | | | | |
+| Qwen2.5-14B | 14B | 18.0 | 31.4 | 41.6 | 54.1 | 29.8 | 42.8 |
+| +Questioning | 14B | 44.3 | 65.5 | 60.3 | 72.1 | 52.3 | 68.8 |
+| +Questioning&Navigating | 14B | 45.4 | 65.3 | 62.8 | 74.5 | 54.1 | 69.9 |
+| +Questioning&Attributing | 14B | 47.8 | 65.6 | 64.9 | 76.3 | 56.4 | 71.0 |
+| **AgentEvolver (overall)** | **14B** | **48.7** | **69.4** | **66.5** | **76.7** | **57.6** | **73.1** |
 
 <!-- ## 🌟 Contact Us -->
 
 ## 🙏 Acknowledgements
 This project builds upon the excellent work of several open-source projects:
 
-- ReMe
-- veRL
-- mkdocs-material
+- [ReMe](https://github.com/agentscope-ai/ReMe)
+- [veRL](https://github.com/volcengine/verl)
+- [mkdocs](https://github.com/mkdocs/mkdocs)
 
 ## 📚 Citation
 If you find this work useful, please consider citing:
