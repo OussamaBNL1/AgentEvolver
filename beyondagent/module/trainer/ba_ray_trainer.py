@@ -67,8 +67,7 @@ from beyondagent.utils.tracking import ValidationGenerationsLogger
 from beyondagent.module.adv_processor.adca_grpo_pipeline import apply_adca_grpo
 
 from beyondagent.module.exp_manager.exp_manager import ExperienceManager
-from itertools import groupby
-from concurrent.futures import as_completed
+
 
 def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | torch.Tensor:
     """
@@ -382,7 +381,6 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
         self._validate_config()
 
-        self.em_client: EMClient | None = None
         self.env_manager: ParallelEnvManager | None = None
         self.thread_pool: ThreadPoolExecutor | None = None
 
@@ -488,7 +486,6 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         self.reward_fn = parse_reward_from_dataproto
         self.val_reward_fn = parse_reward_from_dataproto
 
-        self.em_client = EMClient(base_url=self.config.exp_manager.reme.base_url)
         self.env_manager = ParallelEnvManager(config=self.config, async_rollout_manager=self.async_rollout_manager, max_parallel=self.config.actor_rollout_ref.rollout.max_env_worker)
         self.thread_pool = ThreadPoolExecutor(max_workers=self.config.thread_pool.max_workers)
         self.exp_manager = ExperienceManager(config=self.config)
@@ -1021,32 +1018,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                 print("=" * 10 + "end validate rollout" + "=" * 10)
                 self.async_rollout_manager.sleep()
 
-            # submit summary: updating experience pool
-            trajectories_sorted = sorted(trajectories, key=lambda traj: traj.task_id)
-            grouped_trajectories = [list(group) for key, group in groupby(trajectories_sorted, key=lambda traj: traj.task_id)]
-
-            batch_size = self.config.exp_manager.summary_batch_size
-            all_batches = []
-            for group in grouped_trajectories:
-                for i in range(0, len(group), batch_size):
-                    all_batches.append(group[i:i + batch_size])
-
-            futures = []
-            for batch in all_batches:
-                future = self.thread_pool.submit(
-                    self.em_client.call_summarizer,
-                    trajectories=batch,
-                    workspace_id=self.config.exp_manager.reme.workspace_id
-                )
-                futures.append(future)
-            
-            results = []
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                    results.append(result)
-                except Exception as e:
-                    print(f"Error in summary task: {e}")
+            # summarize in batch: updating experience pool
+            self.exp_manager.summarize_in_batch(trajectories)
         
         return
 
@@ -1205,18 +1178,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     batch.batch["response_mask"] = compute_response_mask(batch)  # ⭐ Compute and add response mask to the batch
 
                     # update experience pool
-                    summary_task = None
-                    reme_config = self.config.exp_manager.reme
-                    if (reme_config.enable_summarizer
-                        and reme_config.updated_freq
-                        and self.global_steps % reme_config.updated_freq == 0):
+                    summary_task = self.exp_manager.submit_summary_task(trajectories, self.global_steps)
 
-                        summary_task = self.thread_pool.submit(
-                            self.em_client.call_summarizer,
-                            trajectories=trajectories,
-                            workspace_id=reme_config.workspace_id
-                        )
-                        print("async submit summary_task~")
 
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
@@ -1371,8 +1334,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     
                     # collect summary tasks
                     if summary_task is not None:
-                        print("wait for summary_task complete~")
-                        summarizer_response, time_cost = summary_task.result()
+                        time_cost = self.exp_manager.collect_summary_result(summary_task)
                         metrics.update({"exp_manager/summary": time_cost})
 
 
