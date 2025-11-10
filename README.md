@@ -24,8 +24,8 @@ improve their capabilities, aiming for efficient, cost-effective, and continuous
 
 ## 📰 News
 
-- **[2025-10]** 📄 The AgentEvolver Technical Report is now available, detailing the framework’s architecture, methodology, and key findings.
-- **[2025-10]** 🧩 AgentEvolver v1 has been released now!
+- **[2025-11]** 📄 The AgentEvolver Technical Report is now available, detailing the framework’s architecture, methodology, and key findings.
+- **[2025-11]** 🧩 AgentEvolver v1 has been released now!
 
 
 ## ✨ Why AgentEvolver
@@ -103,8 +103,8 @@ The script below sets up an environment for appworld.
 cd env_service/environments/appworld && bash setup.sh
 ```
 
-### Step 3. Setup ReMe-Service (Optional)
-Set up the ReMe environment by running the script:
+### Step 3. Setup ReMe (Optional)
+Set up the ReMe for experience management by running the script:
 ```bash
 bash external/reme/install_reme.sh
 ```
@@ -116,8 +116,8 @@ Copy the `example.env` file to `.env` and modify the parameters, including your 
 Using AgentEvoler launcher to start environment, log dashboard and training process altogether.
 
 ```bash
-# minimal example without ReMe
-python launcher.py --conf examples/self-question.yaml --with-appworld
+# minimal example without ReMe (using built-in datasets within environments).
+python launcher.py --conf examples/train-basic.yaml --with-appworld
 
 # full example with ReMe (questioning + navigating + attributing)
 python launcher.py --conf examples/self-question-nav-attr.yaml --with-appworld
@@ -158,5 +158,11 @@ This project builds upon the excellent work of several open-source projects:
 If you find this work useful, please consider citing:
 
 ```bibtex
-@misc{}
+@misc{AgentEvolver2025,
+  title={AgentEvolver: Towards Efficient Self-Evolving Agent System},
+  author={Yunpeng Zhai and Shuchang Tao and Cheng Chen and Anni Zou and Ziqian Chen and Qingxu Fu and Shinji Mai and Li Yu and Jiaji Deng and Zouying Cao and Zhaoyang Liu and Bolin Ding and Jingren Zhou},
+  year={2025},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+}
 ```

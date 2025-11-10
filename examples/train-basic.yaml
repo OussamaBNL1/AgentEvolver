@@ -9,7 +9,7 @@ defaults:
   - _self_
 
 trainer:
-  experiment_name: self-question
+  experiment_name: train-basic
 
 # self-navigating
 exp_manager:
