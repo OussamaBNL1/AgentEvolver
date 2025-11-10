@@ -112,10 +112,10 @@ Using AgentEvoler launcher to start environment, log dashboard and training proc
 
 ```bash
 # minimal example without ReMe
-python launcher.py --conf examples/self-question.yaml --with-appworld --with-logview
+python launcher.py --conf examples/self-question.yaml --with-appworld
 
 # full example with ReMe (questioning + navigating + attributing)
-python launcher.py --conf examples/self-question-nav-attr.yaml --with-appworld --with-logview
+python launcher.py --conf examples/self-question-nav-attr.yaml --with-appworld
 ```
 
 ## 🧩 Advanced Usage
