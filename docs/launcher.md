@@ -1,6 +1,6 @@
 # Launcher Usage Guide (`launcher.py`)
 
-This document explains the usage, arguments, and workflow of `launcher.py`, the main entry point for launching and managing experiments in the BeyondAgent project.
+This document explains the usage, arguments, and workflow of `launcher.py`, the main entry point for launching and managing experiments in the AgentEvolver project.
 
 ## Overview
 
@@ -31,7 +31,7 @@ Explaination:
 
 | Argument                | Type      | Description                                                                                 |
 |------------------------|-----------|---------------------------------------------------------------------------------------------|
-| `--target`             | str       | Target script/module to run (default: `beyondagent.main_ppo`)                               |
+| `--target`             | str       | Target script/module to run (default: `agentevolver.main_ppo`)                               |
 | `--conf`               | str       | Path to the experiment YAML configuration file                                               |
 | `--db`                 | str       | Enable debug mode and set debug tags                                                         |
 | `--with-appworld`      | flag      | Launch AppWorld environment service                                                          |
@@ -64,7 +64,7 @@ Explaination:
 
 ## Persistent service management and logs
 
-Services launched with flags like `--with-appworld`, `--with-exp-maker`, etc., are started via a companion process manager built on `beyondagent.utils.daemon.LaunchCommandWhenAbsent`.
+Services launched with flags like `--with-appworld`, `--with-exp-maker`, etc., are started via a companion process manager built on `agentevolver.utils.daemon.LaunchCommandWhenAbsent`.
 
 What this gives you:
 
@@ -88,7 +88,7 @@ tail -f logs/companion/appworld_env_service.*.log
 Notes:
 
 - Skips re-launch if an existing PGID is active. To restart, stop the service (kill the process group) or remove the corresponding `.pgid` file and relaunch the flag.
-- For PTY-backed services, human-readable command execution is proxied via `beyondagent.utils.pty`; output still goes to the same log file.
+- For PTY-backed services, human-readable command execution is proxied via `agentevolver.utils.pty`; output still goes to the same log file.
 - Tags: `launcher.py` applies a meaningful `tag` for each service (e.g., `appworld_env_service`), which appears in the log filename.
 
 

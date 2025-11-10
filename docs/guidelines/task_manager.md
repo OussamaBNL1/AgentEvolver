@@ -154,7 +154,7 @@ Task Manager can be executed in standalone mode for simple task synthesis.
 Example command:
 
 ```bash
-$ python -m beyondagent.module.task_manager
+$ python -m agentevolver.module.task_manager
 ```
 
 The synthesis progress will be displayed. When the process completes, the path to the generated tasks will be printed.
@@ -322,7 +322,7 @@ For examples in real environments, please refer to `cookbook` in the root direct
 If Python is preferred, an example is
 
 ```python
-from beyondagent.module.task_manager.env_profiles import EnvEntity, EnvEntityOpt, TaskPreference, EnvProfile
+from agentevolver.module.task_manager.env_profiles import EnvEntity, EnvEntityOpt, TaskPreference, EnvProfile
 
 spotify = EnvEntity(
     name="Spotify",
@@ -374,7 +374,7 @@ env_profile = EnvProfile(
 env_profile.reg_entities([spotify, gmail])
 ```
 
-More examples can be found in `beyondagent/module/task_manager/prelude_profiles`.
+More examples can be found in `agentevolver/module/task_manager/prelude_profiles`.
 
 ## Task Derivation
 

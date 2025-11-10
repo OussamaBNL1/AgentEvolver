@@ -6,15 +6,15 @@
 
 import hydra
 
-from beyondagent.client.llm_client import DashScopeClient
-from beyondagent.module.task_manager import NaiveTaskObjectiveRetrieval, TaskManager
-from beyondagent.schema.task import Task
-from beyondagent.client.env_client import EnvClient
+from agentevolver.client.llm_client import DashScopeClient
+from agentevolver.module.task_manager import NaiveTaskObjectiveRetrieval, TaskManager
+from agentevolver.schema.task import Task
+from agentevolver.client.env_client import EnvClient
 
 
 @hydra.main(
     config_path="../config",
-    config_name="beyond_agent_dataflow",
+    config_name="script_config",
     version_base=None,
 )
 def test_get_task_from_cache(config):

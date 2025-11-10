@@ -129,7 +129,7 @@ This gives you more flexibility to control and integrate the environment service
 
 
 ## API Interaction Flow
-Our EnvService communicates via HTTP requests, primarily through the `EnvClient` located at `env_service/env_client.py`, which handles the service connection and has already been integrated into **BeyondAgent**.
+Our EnvService communicates via HTTP requests, primarily through the `EnvClient` located at `env_service/env_client.py`, which handles the service connection and has already been integrated into **AgentEvolver**.
 
 1. **Query Task Candidates (Optional):**  
    `POST /get_env_profile`  

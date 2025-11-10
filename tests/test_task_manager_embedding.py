@@ -7,8 +7,8 @@ from typing import List
 from unittest.mock import patch
 
 # 导入你的实际模块
-from beyondagent.client.embedding_client import OpenAIEmbeddingClient
-from beyondagent.module.task_manager.strategies.deduplication.embedding import EmbeddingClient,StateRecorder,pack_trajectory
+from agentevolver.client.embedding_client import OpenAIEmbeddingClient
+from agentevolver.module.task_manager.strategies.deduplication.embedding import EmbeddingClient,StateRecorder,pack_trajectory
 
 
 class MockTrajectory:
@@ -37,7 +37,7 @@ class TestEmbeddingClientWithRealAPI:
         if not api_key:
             pytest.skip("需要设置 DASHSCOPE_API_KEY 或 OPENAI_API_KEY 环境变量")
         
-        from beyondagent.module.task_manager.strategies.deduplication.embedding import EmbeddingClient
+        from agentevolver.module.task_manager.strategies.deduplication.embedding import EmbeddingClient
         
         # 根据可用的API密钥选择配置
         if os.getenv("DASHSCOPE_API_KEY"):
@@ -206,7 +206,7 @@ class TestEmbeddingClientWithRealAPI:
         if not api_key:
             pytest.skip("需要设置 DASHSCOPE_API_KEY 或 OPENAI_API_KEY 环境变量")
         
-        from beyondagent.module.task_manager.strategies.deduplication.embedding import EmbeddingClient
+        from agentevolver.module.task_manager.strategies.deduplication.embedding import EmbeddingClient
         
         collection_name = "persistence_test"
         
@@ -271,7 +271,7 @@ class TestStateRecorderWithRealAPI:
         if not api_key:
             pytest.skip("需要设置 DASHSCOPE_API_KEY 或 OPENAI_API_KEY 环境变量")
         
-        from beyondagent.module.task_manager.strategies.deduplication.embedding import StateRecorder
+        from agentevolver.module.task_manager.strategies.deduplication.embedding import StateRecorder
         
         return StateRecorder(
             similarity_threshold=0.85,  # 稍高的阈值确保准确性
@@ -399,7 +399,7 @@ class TestRealAPIPerformance:
         
         temp_dir = tempfile.mkdtemp()
         
-        from beyondagent.module.task_manager.strategies.deduplication.embedding import EmbeddingClient
+        from agentevolver.module.task_manager.strategies.deduplication.embedding import EmbeddingClient
         
         if os.getenv("DASHSCOPE_API_KEY"):
             client = EmbeddingClient(

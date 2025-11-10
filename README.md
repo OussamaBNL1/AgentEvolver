@@ -116,11 +116,13 @@ Copy the `example.env` file to `.env` and modify the parameters, including your 
 Using AgentEvoler launcher to start environment, log dashboard and training process altogether.
 
 ```bash
-# minimal example without ReMe (using built-in datasets within environments).
-python launcher.py --conf examples/train-basic.yaml --with-appworld
+conda activate agentevolver
 
-# full example with ReMe (questioning + navigating + attributing)
-python launcher.py --conf examples/self-question-nav-attr.yaml --with-appworld
+# option 1: minimal example without ReMe (using built-in datasets within environments)
+python launcher.py --conf examples/basic.yaml --with-appworld
+
+# option 2: full example with ReMe (questioning + navigating + attributing)
+python launcher.py --conf examples/overall.yaml --with-appworld
 ```
 
 ## 🧩 Advanced Usage

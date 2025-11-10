@@ -8,10 +8,10 @@ import os
 import signal
 import shlex
 from dotenv import load_dotenv
-from beyondagent.utils.daemon import LaunchCommandWhenAbsent
+from agentevolver.utils.daemon import LaunchCommandWhenAbsent
 
 load_dotenv()
-BACK_TARGETS = os.environ.get('BACK_TARGETS', './config,./beyondagent').split(',')
+BACK_TARGETS = os.environ.get('BACK_TARGETS', './config,./agentevolver').split(',')
 
 
 def _replace_placeholder_in_config(config_obj, placeholder: str, replacement: str):
@@ -38,9 +38,9 @@ def parse_args():
     parser.add_argument(
         '--target',
         type=str,
-        default='beyondagent.main_ppo',
+        default='agentevolver.main_ppo',
         required=False,
-        help='Target script to run (default: beyondagent.main_ppo)'
+        help='Target script to run (default: agentevolver.main_ppo)'
     )
     parser.add_argument('--conf',
         type=str,

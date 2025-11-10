@@ -31,9 +31,9 @@ log_file="log_${current_time}.log"
 
 
 
-python3 -m beyondagent.main_ppo \
+python3 -m agentevolver.main_ppo \
     --config-path="$CONFIG_PATH" \
-    --config-name='beyond_agent_dataflow' \
+    --config-name='script_config' \
     env_service.env_url=$env_url \
     exp_manager.val_rollout_mode="woexp" \
     exp_manager.train_rollout_mode="mixed" \

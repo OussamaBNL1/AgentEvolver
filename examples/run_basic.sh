@@ -11,9 +11,9 @@ current_time=$(date "+%Y%m%d_%H%M%S")
 log_file="log_${current_time}.log"
 
 
-python3 -m beyondagent.main_ppo \
+python3 -m agentevolver.main_ppo \
     --config-path="$CONFIG_PATH" \
-    --config-name='beyond_agent_dataflow' \
+    --config-name='script_config' \
     env_service.env_url=$env_url \
     actor_rollout_ref.actor.off_cliprange_high=0.6 \
     attribution_driven_credit_assignment.enable=false \
