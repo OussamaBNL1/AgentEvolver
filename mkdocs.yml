@@ -1,8 +1,11 @@
 # mkdocs.yml
 site_name: AgentEvolver
-# site_url: https://<你的GitHub用户名>.github.io/<仓库名>/
-# repo_url: https://github.com/<你的GitHub用户名>/<仓库名>
-# repo_name: <你的GitHub用户名>/<仓库名>
+site_url: https://modelscope.github.io/AgentEvolver/
+site_description: "AgentEvolver is an end-to-end, self-evolving training framework that unifies self-questioning, self-navigating, and self-attributing into a cohesive system. "
+site_author: "The AgentEvolver Team"
+repo_url: https://github.com/modelscope/AgentEvolver
+repo_name: modelscope/AgentEvolver
+copyright: "Copyright &copy; 2025 AgentEvolver Team"
 
 theme:
   name: shadcn
