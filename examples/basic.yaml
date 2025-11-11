@@ -5,7 +5,7 @@ hydra:
 
 defaults:
   - ppo_trainer
-  - launcher_config
+  - agentevolver
   - _self_
 
 trainer:

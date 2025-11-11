@@ -69,10 +69,10 @@ def parse_args():
         default=False,
         help='Launch bfcl'
     )
-    parser.add_argument('--with-exp-maker',
+    parser.add_argument('--with-reme',
         action='store_true',
         default=False,
-        help='Launch exp maker'
+        help='Launch ReMe'
     )
     parser.add_argument('--with-logview',
         action='store_true',  # Changed from store_true to action='store_true'
@@ -323,9 +323,9 @@ def main():
         else:
             print("Debug mode is OFF")
 
-    if args.with_exp_maker:
+    if args.with_reme:
         # test done
-        pty_launch("exp_maker", success_std_string="Uvicorn running on")
+        pty_launch("reme", success_std_string="Uvicorn running on")
 
     if args.with_appworld:
         # test done
