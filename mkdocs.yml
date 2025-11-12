@@ -34,11 +34,11 @@ nav:
   - Guidelines: 
       - Environment Service: guidelines/env_service.md
       - Task Manager: guidelines/task_manager.md
-      - Context Manager: guidelines/context_manager.md
+      # - Context Manager: guidelines/context_manager.md
       - Experience Manager: guidelines/exp_manager.md
       - Advantage Processor: guidelines/adv_processor.md
-  - API Reference:
-      - API Reference: api/index.html
+  # - API Reference:
+  #     - API Reference: api/index.html
 
 
 markdown_extensions:
