@@ -133,18 +133,10 @@ venv/
 launcher
 cradle.py
 Note
-tasks_explored.train.json
-anni_scripts
-anni_scripts/run_baseline_0825.sh
 temp.sh
-examples/example_launcher
 
 scripts/*
 synthetic_data/*
-examples/example_launcher
 
 site
-examples/beijing/
-examples/beijing_merge/
-examples/wulanchabu/
 launcher_record
