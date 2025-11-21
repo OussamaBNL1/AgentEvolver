@@ -175,3 +175,8 @@ If you find this work useful, please consider citing:
   url           = {https://arxiv.org/abs/2511.10395}
 }
 ```
+
+
+## ✨ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=modelscope/AgentEvolver&type=date&legend=top-left)](https://www.star-history.com/#modelscope/AgentEvolver&type=date&legend=top-left)
