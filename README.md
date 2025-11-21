@@ -11,6 +11,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-black" alt="License"></a>
   <a href="https://modelscope.github.io/AgentEvolver/"><img src="https://img.shields.io/badge/docs-online-blue?logo=markdown" alt="Documentation"></a>
   <a href="https://arxiv.org/abs/2511.10395"><img src="https://img.shields.io/badge/arXiv-2511.10395-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://deepwiki.com/modelscope/AgentEvolver"><img src="https://deepwiki.com/badge.svg" alt="deepwiki"></a>
   <a href="https://github.com/modelscope/AgentEvolver"><img src="https://img.shields.io/github/stars/modelscope/AgentEvolver?style=social" alt="GitHub Stars"></a>
 </p>
 
