@@ -55,7 +55,7 @@ def bfcl_task_preprocess(
         random_seed: Random seed for reproducible data splitting.
         output_dir: Output directory path.
         output_prefix: Prefix for output files.
-        save_by_category: Whether to save files separately by category category.
+        save_by_category: Whether to save files separately by category.
         save_parquet: Whether to save parquet files.
         enable_export_verl_data_schema: Whether to export data in verl format schema.
     Returns:

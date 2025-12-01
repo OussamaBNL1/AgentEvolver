@@ -414,8 +414,8 @@ class SelfContextClipCMT(LinearThinkCMT):
                             role='user',
                             content=dedent(f"""
                                 Your new task is to inspect {target_id}, and filter out all redundant information, and only keep the most important information that is useful for future decision-making.
-                                For example, if the content is a long text with multiple paragraphs, you should only preseve the key paragraphs and use ... to replace the rest.
-                                If the content is a long list of data / dict / json, you should only preseve the key items and use ... to replace the rest.
+                                For example, if the content is a long text with multiple paragraphs, you should only preserve the key paragraphs and use ... to replace the rest.
+                                If the content is a long list of data / dict / json, you should only preserve the key items and use ... to replace the rest.
                                 Be careful to preserve all information that might be useful in the future. You should at least reduce 50% of {target_id}.
                                 Remember： wrap your answer with ```
 

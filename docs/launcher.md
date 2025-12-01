@@ -19,8 +19,8 @@ Run the launcher with desired options. Example:
 ```bash
 python launcher.py --conf examples/self-question-nav-attr.yaml --python-killer --with-appworld --with-exp-maker --with-logview
 ```
-Explaination:
-- `--conf`: Choose a experiment yaml to launch training (the primary argument).
+Explanation:
+- `--conf`: Choose an experiment yaml to launch training (the primary argument).
 - `--python-killer`: Kill existing all Python and Ray processes (except VSCode and itself, use with caution if you are running some other training jobs).
 - `--with-appworld`: Let the launcher help you start `Appworld` environment service (persistent and can avoid re-launching).
 - `--with-exp-maker`: Let the launcher help you start `ReMe` environment service (persistent and can avoid re-launching).

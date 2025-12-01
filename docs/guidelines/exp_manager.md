@@ -7,7 +7,7 @@ At the core of the framework, the **Experience Manager** oversees all aspects of
 
 1. **Experience Pool Management** – Constructing and updating the experience pool with new trajectories and summaries.
 2. **Experience Mode Control** – Determining whether to add experiences during rollouts and whether to remove experience information during training.
-3. **Rollout & Training Context Management** – Providing relevant historical context during rollouts and maintaining experience-strippped training messages.
+3. **Rollout & Training Context Management** – Providing relevant historical context during rollouts and maintaining experience-stripped training messages.
 4. **Training Loss Management** – Aggregating and processing losses with respect to experience-based adjustments for stable learning.
 
 ## 🧩 Core Features

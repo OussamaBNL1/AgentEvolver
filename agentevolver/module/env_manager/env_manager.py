@@ -324,7 +324,7 @@ class ParallelEnvManager(object):
                 for future in as_completed(future_to_params):
                     # get the corresponding params, and remove it from the dict
                     params = future_to_params.pop(future)
-                    self.step_status_printer(tmux) # cc: i dont know what this is
+                    self.step_status_printer(tmux) # cc: i don't know what this is
 
                     # 4. get the results and handle errors
                     try:

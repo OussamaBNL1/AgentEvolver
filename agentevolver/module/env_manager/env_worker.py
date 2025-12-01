@@ -24,7 +24,7 @@ class EnvWorker(object):
         Args:
             task (Task): The task object that contains the details of the task to be executed.
             instance_id (str, optional): A unique identifier for the instance. If not provided, a new UUID will be generated.
-            thread_index (int, optional): The index of the thread if this worker is part of a multi-threaded setup.
+            thread_index (int, optional): The index of the thread if this worker is part of a multithreaded setup.
             tokenizer (optional): The tokenizer to be used for processing text.
             config (DictConfig, optional): The configuration settings for the environment and other components.
         """

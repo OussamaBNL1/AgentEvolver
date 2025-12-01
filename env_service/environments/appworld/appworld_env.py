@@ -490,7 +490,7 @@ and phone number is {{ main_user.phone_number }}.
 
 # You can adapt it as needed by your agent. You can also choose to bypass
 # API docs app and build your own API retrieval, e.g., for FullCodeRefl,
-# IPFunCall, etc, we asked an LLM to predict relevant APIs separately and
+# IPFunCall, etc., we asked an LLM to predict relevant APIs separately and
 # put its documentation directly in the prompt.
 simple_prompt = """
 USER:
