@@ -111,7 +111,7 @@ Outputs are written to `./data/`:
 - data/trajectories/failed_tasks/*.json
 - data/rewrites/trajectories/trajectory_*_rw*.json
 
-5）Development information
+## 💻 Development information
 
 **CLI**
 - --config: path to config file (default: config/config.yaml)
