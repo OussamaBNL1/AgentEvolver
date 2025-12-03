@@ -15,7 +15,7 @@ from agentevolver.schema.trajectory import Trajectory
 from agentevolver.utils.utils import convert_tool_to_user_message, clip_state_content_correctly
 
 
-# I want a extensible AgentFlow rather than patch.
+# I want an extensible AgentFlow rather than patch.
 class ControlledAgentFlow(BaseAgentFlow):
 
     def __init__(self,state_recorder:StateRecorder,reward_calculator:Optional[RewardCalculator]=None, max_record_len:int=200, **kwargs):

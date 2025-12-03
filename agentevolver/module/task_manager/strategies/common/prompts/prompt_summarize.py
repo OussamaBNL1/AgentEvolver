@@ -96,7 +96,7 @@ def _get_action_observation_pair(traj: Trajectory) -> list[tuple[str, str]]:
         assert "role" in step, "steps must have role field"
         if step["role"] == "assistant" and idx + 1 < len(traj.steps):
             next_step = traj.steps[idx + 1]
-            # As there is no standard for environments, we do not know whether it will response as user or tool.
+            # As there is no standard for environments, we do not know whether it will respond as user or tool.
             if next_step["role"] == "tool":
                 # get observation from tool message
                 observation = next_step["content"]

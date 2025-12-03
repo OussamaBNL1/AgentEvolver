@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
     def test_embedding(thread_id: int, text: str):
         """
-        Tests the embedding retrieval process in a multi-threaded environment.
+        Tests the embedding retrieval process in a multithreaded environment.
 
         Args:
             thread_id (int): Identifier for the current thread.
