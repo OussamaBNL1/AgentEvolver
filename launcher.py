@@ -285,12 +285,12 @@ def main():
                     print(f"\rWarning: backup directory already exists, we will automatically ignore this after {total_seconds - i} seconds...", end="", flush=True)
                     time.sleep(1)
 
-            ## 2. copy files to backup
+            ## 2. copy files to back up
             for backup_target in BACK_TARGETS:
                 print(f"Copying {backup_target} to {os.path.join(backup_dir, os.path.basename(backup_target))}")
                 shutil.copytree(backup_target, os.path.join(backup_dir, os.path.basename(backup_target)), dirs_exist_ok=True)
 
-            ## 3. copy yaml to backup
+            ## 3. copy yaml to back up
             yaml_backup_src = yaml_path
             shutil.copyfile(yaml_backup_src, yaml_backup_dst)
 
@@ -336,7 +336,7 @@ def main():
         pty_launch("crafters")
 
     if args.with_webshop:
-        # not tesed
+        # not tested
         pty_launch("webshop")
 
     if args.with_bfcl:

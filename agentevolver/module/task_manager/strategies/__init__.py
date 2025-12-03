@@ -11,7 +11,7 @@ from agentevolver.schema.trajectory import Trajectory
 class TaskExploreStrategy(abc.ABC):
     """The abstract class of exploration strategy used in Task Manager for task generation.
     
-    It provides nescessary contexts.
+    It provides necessary contexts.
     """
     def _inject_deps(self,old_retrival: TaskObjectiveRetrieval,llm_client_explore: LlmClient, llm_client_summarize: LlmClient, env_profile:EnvProfile):
         self._old_retrival = old_retrival

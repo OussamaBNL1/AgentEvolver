@@ -230,7 +230,7 @@ class ExtendedMessage:
             Args:
                 mask (list): The initial mask.
                 arr (list): The token array.
-                token_ids (list): The sequence of token IDs to blackout.
+                token_ids (list): The sequence of token IDs to black out.
 
             Returns:
                 list: The updated mask.

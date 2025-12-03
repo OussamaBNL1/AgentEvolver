@@ -134,7 +134,7 @@ def _extract_role_header_tokens(tokenizer, role: str) -> List[int]:
             return header_tokens
             
     except Exception as e:
-        # Don't fallback, throw error directly
+        # Don't fall back, throw error directly
         raise RuntimeError(f"Failed to extract header tokens for role '{role}': {e}") from e
 
 def parse_response_ids_to_steps(

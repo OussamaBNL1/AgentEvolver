@@ -121,7 +121,7 @@ task_manager:
   # model used to explore the environment
   llm_client: qwen-plus
 
-  # repetation of exploration
+  # repetition of exploration
   # 0 - stop exploration
   n: 0
   # env profiles used in exploration. If you set n to 0, just ignore this.
