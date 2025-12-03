@@ -5,6 +5,8 @@
 
 CuES is a **curiosity-driven, environment-grounded framework** for synthesizing high-quality agentic data **without predefined seed queries**.
 
+## 🪄 Overview
+
 <p align="center">
   <img src="figs/cues.png" alt="CuES Logo" width="1200">
 </p>
@@ -58,22 +60,12 @@ CuES is evaluated on **AppWorld**, **WebShop**, and **BFCL v3 Multi-Turn Base**,
 
 ---
 
-## ⚙️ Requirements
+## 📥 Quickstart
 
+1) Requirements
 - Python **3.10+**
 - Access to **Aliyun DashScope API**
 - (Optional) **EnvService** if using external interactive environments (AppWorld / BFCL / WebShop)
-
----
-
-## 📥 Installation
-
-## Quickstart
-
-1) Requirements
-- Python 3.10+
-- Access to Aliyun DashScope API
-- EnvService if using external simulated environments (AppWorld/BFCL/WebShop)
 
 2) Installation
 
@@ -119,8 +111,9 @@ Outputs are written to `./data/`:
 - data/trajectories/failed_tasks/*.json
 - data/rewrites/trajectories/trajectory_*_rw*.json
 
+5）Development information
 
-## CLI
+**CLI**
 - --config: path to config file (default: config/config.yaml)
 - --stage: all | stage1 | stage2 | stage3
 - --session-name: label for the run
@@ -130,14 +123,14 @@ Outputs are written to `./data/`:
 - --extract: extract concept set from env (optional)
 - --rewrite | --query-rewrite: run Query Rewrite after Stage 3
 
-## main() flow
+**main() flow** 
 1. Load config and validate API key
 2. If AppWorld is selected, probe EnvService
 3. Build pipeline and run selected stage(s)
 4. Save outputs and stats
 5. If rewrite is enabled, run Query Rewrite over Stage 3 outputs
 
-## Development notes
+**notes**
 - Code layout:
   - agents/: LLM action planner and evaluator
   - core/: API client, memory manager, pipeline
@@ -148,4 +141,24 @@ Outputs are written to `./data/`:
   - utils/: logger and config utilities
 - Trajectories store both metadata and `messages` for downstream use.
 - Query Rewrite preserves all keys and only changes `query`.
+
+## 📚 Citation
+If you find this work useful, please consider citing:
+
+```bibtex
+@misc{mai2025cues,
+  title         = {CuES: A Curiosity-driven and Environment-grounded Synthesis Framework for Agentic RL},
+  author        = {Mai, Shinji and Zhai, Yunpeng and Chen, Ziqian and Chen, Cheng and Zou, Anni and Tao, Shuchang and Liu, Zhaoyang and Ding, Bolin},
+  year          = {2025},
+  month         = dec,
+  eprint        = {2512.01311},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.AI},
+  doi           = {10.48550/arXiv.2512.01311},
+  url           = {https://arxiv.org/abs/2512.01311}
+}
+```
+
+
+
 
